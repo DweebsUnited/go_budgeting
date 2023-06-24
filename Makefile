@@ -1,7 +1,8 @@
-clean: .PHONY
-	rm -rf bin/*
+.PHONY: clean all
+all: bin/server
 
-all: server
-
-server:
+bin/server:
 	go build -o bin/server ./cmd/server
+
+clean:
+	rm -rf bin/*
