@@ -1,0 +1,109 @@
+Storage:
+    - Dates are saved as BCD ints: YYYYMMDD
+        - Month = date %100, Year = date %10000
+    - Checkpoints are the materialized monthly summary values, to prevent always summing over all transactions
+        - These are updated by recursive triggers
+    - All tables are interfaced with a View with INSTEAD OF triggers for allowed actions
+        - The Views mostly pass through, but we have to handle some bulk ops specially
+        - External queries should mostly ONLY access the Views
+            - Only Import/Export/Batch should access raw tables
+            - And then should lock them for exclusive access if possible
+            - If the raw tables are edited, then take care to update the checkpoints as well
+
+Sanity checks:
+    - Starting checkpoint exists at EPOCH (date=0) for all accounts, envelopes, and summary
+    - All checkpoint values are correct
+    - Debt envelopes exist iff account is a debt account
+    - No a_t/e_t exist without an a/e AND a matching checkpoint
+
+Triggers:
+    - Account is inserted
+        - Insert an EPOCH checkpoint with "starting" balance
+    - Envelope is inserted
+        - Insert an EPOCH checkpoint with 0 balance
+
+    - Account is updated
+        - IF NEW.offbudget OR ! NEW.Debt
+            - IF Debt Envelope exists
+                - Delete
+        - ELIF ! NEW.offbudget AND NEW.Debt
+            - IF Debt Envelope ! exists
+                - Create Debt Envelope
+                - For a_t insert matching NORM e_t
+
+    - Account is deleted
+        - NAIVE:
+            - IF Debt envelope exists
+                - Delete
+            - Cascade delete a_t <- recursively updates a_chk and summaries
+            - Cascade delete a_chk <- recursively updates summaries
+        - BATCH:
+            - Select all e, oldest(date) referenced by a_t into temp table
+            - Raw delete all a_t
+            - Raw delete all a_chk
+            - IF Debt envelope exists
+                - Delete <- Will now cause smaller number of updates
+            - Upsert oldest e_chk for each temp row
+            - Update EPOCH s_chk to be safe
+    - Envelope is deleted
+        - NAIVE:
+            - Set all a_t to NULL <- recursively updates a_chk and summaries
+            - Cascade delete e_t <- recursively updates e_chk and summaries
+            - Cascade delete e_chk <- recursively updates summaries
+        - BATCH:
+            - Select a, oldest(date) from a_t into temp table
+            - Raw update a_t to NULL
+            - Raw delete all e_t
+            - Raw delete all e_chk
+            - Upsert oldest a_chk for each temp row
+            - Update EPOCH s_chk to be safe
+
+    - a_t inserted
+        - IF Debt envelope exists
+            - Insert -(NEW) into e_t
+        - IF NEW.envelope != NULL
+            - Upsert e_chk
+    - a_t updated
+        - IF Debt envelope exists
+            - Insert -(NEW-OLD) into e_t
+        - IF NEW.envelope != NULL
+            - Upsert e_chk
+        - IF OLD.envelope != NULL
+            - Upsert e_chk
+    - a_t deleted
+        - IF Debt envelope exists
+            - Insert OLD into e_t
+        - IF OLD.envelope != NULL
+            - Upsert e_chk
+
+    - e_t inserted
+        - Upsert e_chk
+    - e_t updated
+        - Upsert oldest(e_chk)
+    - e_t deleted
+        - Upsert e_chk
+
+    - a_chk/e_chk inserted
+        - Update self.UPSERT, .DIRTY
+    - a_chk/e_chk updated
+        - IF !self.DIRTY
+            - Return
+        - Recalculate values
+        - Update self.!DIRTY
+        - Update next a_chk/e_chk.DIRTY, .!UPSERT
+        - IF NEW.UPSERT
+            - Upsert s_chk
+    - a_chk/e_chk deleted
+        - IF no more a_chk/e_chk exist
+            - Delete s_chk
+
+    - s_chk inserted
+        - Update self.DIRTY
+    - s_chk updated
+        - IF !NEW.DIRTY
+            - Return
+        - Recalculate values
+        - Update self.!DIRTY
+        - Update next s_chk.DIRTY
+    - s_chk deleted
+        - Update next s_chk
