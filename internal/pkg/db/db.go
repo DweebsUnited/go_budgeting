@@ -8,7 +8,7 @@ import (
 // TODO: Interface wrapping various DB drivers with our Models
 type DB interface {
 	GetAccounts() ([]model.Account, error)
-	NewAccount(*model.Account, startingBal int) error
+	NewAccount(a *model.Account, startingBal int) error
 	UpdateAccount(model.Account) error
 	DeleteAccount(id uint) error
 
@@ -20,6 +20,7 @@ type DB interface {
 	DeleteEnvelopeGroup(id uint) error
 
 	GetEnvelopes() ([]model.Envelope, error)
+	GetEnvelopesInGroup(model.EnvelopeGroup) ([]model.Envelope, error)
 	NewEnvelope(*model.Envelope) error
 	UpdateEnvelope(model.Envelope) error
 	DeleteEnvelope(id uint) error
@@ -37,6 +38,6 @@ type DB interface {
 	UpdateTransaction(model.AccountTransaction) error
 	NewAccountTransaction(*model.AccountTransaction) error
 	NewEnvelopeTransaction(*model.EnvelopeTransaction) error
-	DeleteAccountTransaction(model.AccountTransaction) error
-	DeleteEnvelopeTransaction(model.EnvelopeTransaction) error
+	DeleteAccountTransaction(id uint) error
+	DeleteEnvelopeTransaction(id uint) error
 }

@@ -3,11 +3,17 @@ package model
 import "budgeting/internal/pkg/bcdate"
 
 // This is an aggregation model, a way to get a whole month at a time
+// This is the primary application model
 
 type Month_Account struct {
 	A Account
 	S AccountSummary
 	T []AccountTransaction
+}
+
+type Month_Groups struct {
+	G EnvelopeGroup
+	E []Month_Envelopes
 }
 
 type Month_Envelopes struct {
@@ -17,8 +23,7 @@ type Month_Envelopes struct {
 }
 
 type Month struct {
-	Month     bcdate.BCDate
-	Accounts  []Month_Account
-	Groups    []EnvelopeGroup
-	Envelopes []Month_Envelopes
+	Month    bcdate.BCDate
+	Accounts []Month_Account
+	Groups   []Month_Groups
 }
