@@ -28,8 +28,6 @@ type Account struct {
 	Institution string
 	Name        string
 	Class       AccountClass
-
-	Sort int
 }
 
 type TransactionType uint16
@@ -62,7 +60,7 @@ type AccountSummary struct {
 	Bal     int
 	In      int
 	Out     int
-	Cleared bool
+	Cleared int
 }
 
 type EnvelopeGroup struct {

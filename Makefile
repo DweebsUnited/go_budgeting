@@ -1,6 +1,6 @@
-.PHONY: clean all
+.PHONY: clean all bin/server bin/querytool
 
-all: clean bin/server bin/querytool
+all: bin/server bin/querytool
 
 bin/server:
 	go build -o bin/server ./cmd/server

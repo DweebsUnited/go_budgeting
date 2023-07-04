@@ -10,34 +10,34 @@ type DB interface {
 	GetAccounts() ([]model.Account, error)
 	NewAccount(a *model.Account, startingBal int) error
 	UpdateAccount(model.Account) error
-	DeleteAccount(id uint) error
+	DeleteAccount(id model.PKEY) error
 
-	SetStartingBalance(id uint, balance int) error
+	SetStartingBalance(id model.PKEY, balance int) error
 
 	GetEnvelopeGroups() ([]model.EnvelopeGroup, error)
 	NewEnvelopeGroup(*model.EnvelopeGroup) error
 	UpdateEnvelopeGroup(model.EnvelopeGroup) error
-	DeleteEnvelopeGroup(id uint) error
+	DeleteEnvelopeGroup(id model.PKEY) error
 
 	GetEnvelopes() ([]model.Envelope, error)
-	GetEnvelopesInGroup(model.EnvelopeGroup) ([]model.Envelope, error)
+	GetEnvelopesInGroup(id model.PKEY) ([]model.Envelope, error)
 	NewEnvelope(*model.Envelope) error
 	UpdateEnvelope(model.Envelope) error
-	DeleteEnvelope(id uint) error
+	DeleteEnvelope(id model.PKEY) error
 
 	GetAllTransactions(month bcdate.BCDate) ([]model.AccountTransaction, error)
-	GetAllAccountTransactions(id uint) ([]model.AccountTransaction, error)
-	GetAllEnvelopeTransactions(id uint) ([]model.EnvelopeTransaction, error)
-	GetAccountTransactions(month bcdate.BCDate, id uint) ([]model.AccountTransaction, error)
-	GetEnvelopeTransactions(month bcdate.BCDate, id uint) ([]model.EnvelopeTransaction, error)
+	GetAllAccountTransactions(id model.PKEY) ([]model.AccountTransaction, error)
+	GetAllEnvelopeTransactions(id model.PKEY) ([]model.EnvelopeTransaction, error)
+	GetAccountTransactions(month bcdate.BCDate, id model.PKEY) ([]model.AccountTransaction, error)
+	GetEnvelopeTransactions(month bcdate.BCDate, id model.PKEY) ([]model.EnvelopeTransaction, error)
 
-	GetAccountSummary(month bcdate.BCDate, id uint) (model.AccountSummary, error)
-	GetEnvelopeSummary(month bcdate.BCDate, id uint) (model.EnvelopeSummary, error)
+	GetAccountSummary(month bcdate.BCDate, id model.PKEY) (model.AccountSummary, error)
+	GetEnvelopeSummary(month bcdate.BCDate, id model.PKEY) (model.EnvelopeSummary, error)
 	GetOverallSummary(month bcdate.BCDate) (model.Summary, error)
 
 	UpdateTransaction(model.AccountTransaction) error
 	NewAccountTransaction(*model.AccountTransaction) error
 	NewEnvelopeTransaction(*model.EnvelopeTransaction) error
-	DeleteAccountTransaction(id uint) error
-	DeleteEnvelopeTransaction(id uint) error
+	DeleteAccountTransaction(id model.PKEY) error
+	DeleteEnvelopeTransaction(id model.PKEY) error
 }

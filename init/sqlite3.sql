@@ -21,7 +21,7 @@ CREATE TABLE e (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     groupID INTEGER REFERENCES e_grp(ID) NOT NULL,
     hidden INTEGER NOT NULL DEFAULT (0),
-    debtAccount INTEGER REFERENCES a(ID) UNIQUE,
+    debtAccount INTEGER REFERENCES a(ID) NOT NULL DEFAULT(0),
     name TEXT NOT NULL,
     notes TEXT NOT NULL DEFAULT (''),
     goalType INTEGER NOT NULL DEFAULT(0),
@@ -29,6 +29,30 @@ CREATE TABLE e (
     goalTgt INTEGER NOT NULL DEFAULT(0),
     sort INTEGER NOT NULL DEFAULT (999)
 );
+
+DROP TRIGGER IF EXISTS e_da_u_i;
+CREATE TRIGGER e_da_u_i
+BEFORE INSERT
+ON e
+WHEN NEW.debtAccount > 0
+BEGIN
+    SELECT CASE
+        WHEN EXISTS (SELECT * FROM e WHERE debtAccount = NEW.debtAccount)
+            THEN RAISE (ABORT, 'debtAccount not unique')
+        END;
+END;
+
+DROP TRIGGER IF EXISTS e_da_u_u;
+CREATE TRIGGER e_da_u_u
+BEFORE UPDATE
+ON e
+WHEN NEW.debtAccount > 0
+BEGIN
+    SELECT CASE
+        WHEN EXISTS (SELECT * FROM e WHERE debtAccount = NEW.debtAccount)
+            THEN RAISE (ABORT, 'debtAccount not unique')
+        END;
+END;
 
 DROP TABLE IF EXISTS a_t;
 CREATE TABLE a_t (

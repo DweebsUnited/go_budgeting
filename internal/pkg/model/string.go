@@ -20,7 +20,7 @@ func (ac AccountClass) String() string {
 }
 
 func (a Account) String() string {
-	ret := fmt.Sprintf("%d: %s:%s -- ", a.ID, a.Institution, a.Name)
+	ret := fmt.Sprintf("%03d: %5s:%20s -- ", a.ID, a.Institution, a.Name)
 	if a.Hidden {
 		ret += "H"
 	} else {
@@ -43,12 +43,16 @@ func (a Account) String() string {
 	return ret
 }
 
+func (s AccountSummary) String() string {
+	return fmt.Sprintf("%03d -- %08d -- %05d / %05d --  ->%05d  <-%05d", s.AccountID, s.Month, s.Cleared, s.Bal, s.In, s.Out)
+}
+
 func (eg EnvelopeGroup) String() string {
-	return fmt.Sprintf("%d: %s", eg.ID, eg.Name)
+	return fmt.Sprintf("%03d: %20s", eg.ID, eg.Name)
 }
 
 func (e Envelope) String() string {
-	ret := fmt.Sprintf("%d.%d %s -- ", e.GroupID, e.ID, e.Name)
+	ret := fmt.Sprintf("%03d.%03d %20s -- ", e.GroupID, e.ID, e.Name)
 	if e.Hidden {
 		ret += "H"
 	} else {
@@ -69,7 +73,11 @@ func (e Envelope) String() string {
 	}
 	ret += fmt.Sprintf("=%d/%d", e.GoalAmt, e.GoalTgt)
 	if e.DebtAccount > 0 {
-		ret += fmt.Sprintf(" -> %d", e.DebtAccount)
+		ret += fmt.Sprintf(" -> %03d", e.DebtAccount)
 	}
 	return ret
+}
+
+func (s EnvelopeSummary) String() string {
+	return fmt.Sprintf("%03d -- %08d -- %05d --  ->%05d  <-%05d", s.EnvelopeID, s.Month, s.Bal, s.In, s.Out)
 }
