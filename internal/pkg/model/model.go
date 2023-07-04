@@ -1,6 +1,8 @@
 package model
 
-import "budgeting/internal/pkg/bcdate"
+import (
+	"budgeting/internal/pkg/bcdate"
+)
 
 // All structure definitions should go here
 // This is the M of MVC

@@ -80,7 +80,7 @@ CREATE TABLE e_chk (
     month INTEGER NOT NULL,
     bal INTEGER NOT NULL DEFAULT(0),
     "in" INTEGER NOT NULL DEFAULT(0),
-    out INTEGER NOT NULL DEFAULT(0)
+    out INTEGER NOT NULL DEFAULT(0),
 
     PRIMARY KEY(envelopeID, month)
 );
