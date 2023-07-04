@@ -9,3 +9,7 @@ func CurrentMonth() BCDate {
 
 	return BCDate(int(n.Year())*10000 + int(n.Month())*100)
 }
+
+func Epoch() BCDate {
+	return 0
+}

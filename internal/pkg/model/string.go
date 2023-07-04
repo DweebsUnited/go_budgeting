@@ -43,6 +43,10 @@ func (a Account) String() string {
 	return ret
 }
 
+func (a Account) DebtEnvelopeName() string {
+	return "Debt Account: " + a.Institution + ":" + a.Name
+}
+
 func (s AccountSummary) String() string {
 	return fmt.Sprintf("%03d -- %08d -- %05d / %05d --  ->%05d  <-%05d", s.AccountID, s.Month, s.Cleared, s.Bal, s.In, s.Out)
 }

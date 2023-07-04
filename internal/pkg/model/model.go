@@ -115,6 +115,7 @@ type Summary struct {
 	Float    int
 	Income   int
 	Expenses int
+	Banked   int
 	NetWorth int
 	Delta    int
 }

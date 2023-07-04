@@ -1,2 +1,2 @@
 go build -o bin\server.exe ./cmd/server
-.\bin\server.exe
+go build -o bin\querytool.exe ./tools/querytool
