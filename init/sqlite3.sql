@@ -73,6 +73,15 @@ CREATE INDEX a_t_date ON a_t (postDate);
 CREATE INDEX a_t_aid ON a_t (accountID);
 CREATE INDEX a_t_eid ON a_t (envelopeID);
 
+DROP TRIGGER IF EXISTS a_t_u;
+CREATE TRIGGER a_t_u
+BEFORE UPDATE
+ON a_t
+WHEN NEW.accountID != OLD.accountID
+BEGIN
+    SELECT RAISE (ABORT, 'Changing a_t accountID not supported');
+END;
+
 DROP TABLE IF EXISTS e_t;
 CREATE TABLE e_t (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,6 +95,15 @@ DROP INDEX IF EXISTS e_t_eid;
 CREATE INDEX e_t_date ON e_t (postDate);
 CREATE INDEX e_t_eid ON e_t (envelopeID);
 
+DROP TRIGGER IF EXISTS e_t_u;
+CREATE TRIGGER e_t_u
+BEFORE UPDATE
+ON e_t
+WHEN NEW.envelopeID != OLD.envelopeID
+BEGIN
+    SELECT RAISE (ABORT, 'Changing e_t envelopeID not supported');
+END;
+
 DROP TABLE IF EXISTS a_chk;
 CREATE TABLE a_chk (
     accountID INTEGER REFERENCES a(ID) NOT NULL,
@@ -93,7 +111,7 @@ CREATE TABLE a_chk (
     bal INTEGER NOT NULL DEFAULT(0),
     "in" INTEGER NOT NULL DEFAULT(0),
     out INTEGER NOT NULL DEFAULT(0),
-    cleared INTEGER NOT NULL DEFAULT(0),
+    uncleared INTEGER NOT NULL DEFAULT(0),
 
     PRIMARY KEY(accountID, month)
 );

@@ -306,7 +306,12 @@ func handleAccount(sdb db.DB, op string, args []string) {
 			case "class":
 				aDB.Class = a.Class
 			case "sbal":
-				sdb.SetStartingBalance(a.ID, *sbal)
+				err := sdb.SetStartingBalance(a.ID, *sbal)
+				if err != nil {
+					log.Fatalf("Error setting starting balance: %s", err.Error())
+				}
+
+				log.Printf("Set starting balance of %d to %d", a.ID, *sbal)
 			}
 		})
 

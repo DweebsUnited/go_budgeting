@@ -48,7 +48,7 @@ func (a Account) DebtEnvelopeName() string {
 }
 
 func (s AccountSummary) String() string {
-	return fmt.Sprintf("%03d -- %08d -- %05d / %05d --  ->%05d  <-%05d", s.AccountID, s.Month, s.Cleared, s.Bal, s.In, s.Out)
+	return fmt.Sprintf("%03d -- %08d -- %05d / %05d --  ->%05d  <-%05d", s.AccountID, s.Month, s.Bal, s.Uncleared, s.In, s.Out)
 }
 
 func (eg EnvelopeGroup) String() string {

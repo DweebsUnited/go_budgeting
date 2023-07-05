@@ -4,7 +4,6 @@ import (
 	"budgeting/internal/pkg/bcdate"
 	"budgeting/internal/pkg/model"
 	"database/sql"
-	"errors"
 	"fmt"
 	"io/ioutil"
 
@@ -149,6 +148,11 @@ func (s *SQLite) UpdateAccount(a model.Account) error {
 		return fmt.Errorf("UpdateAccount.Scan.a -- %w", err)
 	}
 
+	_, err = tx.Exec("UPDATE a SET hidden = ?, offbudget = ?, debt = ?, institution = ?, name = ?, class = ? WHERE ID = ?", a.Hidden, a.Offbudget, a.Debt, a.Institution, a.Name, a.Class, a.ID)
+	if err != nil {
+		return fmt.Errorf("UpdateAccount.Update.a -- %w", err)
+	}
+
 	if a.Debt {
 		if !oldDebt {
 			if err := s.newDebtEnvelope(tx, a.ID, a.DebtEnvelopeName()); err != nil {
@@ -163,17 +167,9 @@ func (s *SQLite) UpdateAccount(a model.Account) error {
 		if err := s.deleteDebtEnvelope(tx, a.ID); err != nil {
 			return fmt.Errorf("UpdateAccount.deleteDebtEnvelope -- %s", err.Error())
 		}
-		if err := s.updateAccountSummaries(tx, bcdate.Epoch(), a.ID); err != nil {
-			return fmt.Errorf("UpdateAccount.updateAccountSummaries -- %s", err.Error())
-		}
 		if err := s.updateSummaries(tx, bcdate.Epoch()); err != nil {
 			return fmt.Errorf("UpdateAccount.updateSummaries -- %s", err.Error())
 		}
-	}
-
-	_, err = tx.Exec("UPDATE a SET hidden = ?, offbudget = ?, debt = ?, institution = ?, name = ?, class = ? WHERE ID = ?", a.Hidden, a.Offbudget, a.Debt, a.Institution, a.Name, a.Class, a.ID)
-	if err != nil {
-		return fmt.Errorf("UpdateAccount.Update.a -- %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -199,9 +195,37 @@ func (s *SQLite) DeleteAccount(id model.PKEY) error {
 		s.deleteDebtEnvelope(tx, id)
 	}
 
+	type atupdate struct {
+		postdate   bcdate.BCDate
+		envelopeID model.PKEY
+	}
+	atus := make([]atupdate, 0)
+	rows, err := s.db.Query("SELECT min(postDate) AS postDate, envelopeID FROM a_t GROUP BY envelopeID")
+	if err != nil {
+		return fmt.Errorf("DeleteAccount.Select.a_t -- %w", err)
+	}
+	for rows.Next() {
+		var atu atupdate
+		if err := rows.Scan(
+			&atu.postdate,
+			&atu.envelopeID,
+		); err != nil {
+			return fmt.Errorf("DeleteAccount.Scan.a_t -- %w", err)
+		}
+		atus = append(atus, atu)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("DeleteAccount.Select.a_t.Err -- %w", err)
+	}
+	rows.Close()
+
 	_, err = tx.Exec("DELETE FROM a_t WHERE accountID = ?", id)
 	if err != nil {
 		return fmt.Errorf("DeleteAccount.Delete.a_t -- %w", err)
+	}
+
+	for _, atu := range atus {
+		s.updateEnvelopeSummaries(tx, atu.postdate, atu.envelopeID)
 	}
 
 	_, err = tx.Exec("DELETE FROM a_chk WHERE accountID = ?", id)
@@ -296,7 +320,7 @@ func (s *SQLite) GetEnvelopeGroup(id model.PKEY) (model.EnvelopeGroup, error) {
 }
 func (s *SQLite) NewEnvelopeGroup(eg *model.EnvelopeGroup) error {
 	var eid int
-	row := s.db.QueryRow("INSERT INTO e_grp (name,sort) VALUES (?,?)", eg.Name, eg.Sort)
+	row := s.db.QueryRow("INSERT INTO e_grp (name,sort) VALUES (?,?) RETURNING ID", eg.Name, eg.Sort)
 	if err := row.Scan(&eid); err != nil {
 		return fmt.Errorf("NewEnvelopeGroup.Insert.e_grp.Scan -- %w", err)
 	}
@@ -311,10 +335,26 @@ func (s *SQLite) UpdateEnvelopeGroup(eg model.EnvelopeGroup) error {
 	return nil
 }
 func (s *SQLite) DeleteEnvelopeGroup(id model.PKEY) error {
-	_, err := s.db.Exec("DELETE FROM e_grp WHERE ID = ?", id)
+	tx, err := s.db.Begin()
 	if err != nil {
-		return fmt.Errorf("DeleteEnvelopeGroup.Delete.e_grp -- %w", err)
+		return fmt.Errorf("DeleteEnvelopeGroup.Begin-- %w", err)
 	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("UPDATE e SET groupID = ? WHERE envelopeID = ?", 1, id)
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelopeGroup.Update.a_t -- %w", err)
+	}
+
+	_, err = tx.Exec("DELETE FROM e_grp WHERE ID = ?", id)
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelopeGroup.Delete.e -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("DeleteEnvelopeGroup.Commit -- %w", err)
+	}
+
 	return nil
 }
 
@@ -401,20 +441,92 @@ func (s *SQLite) GetEnvelope(id model.PKEY) (model.Envelope, error) {
 	}
 	return e, nil
 }
-func (s *SQLite) NewEnvelope(*model.Envelope) error {
-	return errors.New("not implemented")
+func (s *SQLite) NewEnvelope(e *model.Envelope) error {
+	var id int
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("NewEnvelope.Begin-- %w", err)
+	}
+	defer tx.Rollback()
+
+	row := tx.QueryRow("INSERT INTO e (groupID,hidden,name,notes,goalType,goalAmt,goalTgt,sort) VALUES (?,?,?,?,?,?,?,?) RETURNING ID", e.GroupID, e.Hidden, e.Name, e.Notes, e.Goal, e.GoalAmt, e.GoalTgt, e.Sort)
+	if err := row.Scan(&id); err != nil {
+		return fmt.Errorf("NewEnvelope.Insert.e.Scan -- %w", err)
+	}
+	e.ID = model.PKEY(id)
+
+	_, err = tx.Exec("INSERT INTO e_chk (envelopeID,month,bal) VALUES (?,?,?)", id, bcdate.Epoch(), 0)
+	if err != nil {
+		return fmt.Errorf("NewEnvelope.Insert.e_chk -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("NewEnvelope.Commit -- %w", err)
+	}
+
+	return nil
 }
-func (s *SQLite) UpdateEnvelope(model.Envelope) error {
-	return errors.New("not implemented")
+func (s *SQLite) UpdateEnvelope(e model.Envelope) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("UpdateEnvelope.Begin-- %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("UPDATE e SET groupID = ?, hidden = ?, name = ?, notes = ?, goalType = ?, goalAmt = ?, goalTgt = ?, sort = ? WHERE ID = ?", e.GroupID, e.Hidden, e.Name, e.Notes, e.Goal, e.GoalAmt, e.GoalTgt, e.Sort, e.ID)
+	if err != nil {
+		return fmt.Errorf("UpdateEnvelope.Update.e -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("UpdateEnvelope.Commit -- %w", err)
+	}
+
+	return nil
 }
 func (s *SQLite) DeleteEnvelope(id model.PKEY) error {
-	return errors.New("not implemented")
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelope.Begin-- %w", err)
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("UPDATE a_t SET envelopeID = ? WHERE envelopeID = ?", 0, id)
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelope.Update.a_t -- %w", err)
+	}
+
+	_, err = tx.Exec("DELETE FROM e_t WHERE envelopeID = ?", id)
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelope.Delete.e_t -- %w", err)
+	}
+
+	_, err = tx.Exec("DELETE FROM e_chk WHERE envelopeID = ?", id)
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelope.Delete.e_chk -- %w", err)
+	}
+
+	_, err = tx.Exec("DELETE FROM e WHERE ID = ?", id)
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelope.Delete.e -- %w", err)
+	}
+
+	if err := s.updateSummaries(tx, bcdate.Epoch()); err != nil {
+		return fmt.Errorf("DeleteEnvelope.updateSummaries -- %s", err.Error())
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("DeleteEnvelope.Commit -- %w", err)
+	}
+
+	return nil
 }
 
 func (s *SQLite) GetAllTransactions(month bcdate.BCDate) ([]model.AccountTransaction, error) {
 	ats := make([]model.AccountTransaction, 0)
 
-	rows, err := s.db.Query("SELECT * FROM a_t WHERE mod(postDate,100) = ? ORDER BY postDate DESC", month)
+	rows, err := s.db.Query("SELECT * FROM a_t WHERE postDate-mod(postDate,100) = ? ORDER BY postDate DESC", month)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllTransactions.Select -- %w", err)
 	}
@@ -473,7 +585,7 @@ func (s *SQLite) GetAllAccountTransactions(id model.PKEY) ([]model.AccountTransa
 func (s *SQLite) GetAccountTransactions(month bcdate.BCDate, id model.PKEY) ([]model.AccountTransaction, error) {
 	ats := make([]model.AccountTransaction, 0)
 
-	rows, err := s.db.Query("SELECT * FROM a_t WHERE accountID = ? AND mod(postDate,100) = ? ORDER BY postDate DESC", id, month)
+	rows, err := s.db.Query("SELECT * FROM a_t WHERE accountID = ? AND postDate-mod(postDate,100) = ? ORDER BY postDate DESC", id, month)
 	if err != nil {
 		return nil, fmt.Errorf("GetAllTransactions.Select -- %w", err)
 	}
@@ -500,13 +612,121 @@ func (s *SQLite) GetAccountTransactions(month bcdate.BCDate, id model.PKEY) ([]m
 	return ats, nil
 }
 
-func (s *SQLite) NewAccountTransaction(*model.AccountTransaction) error {
-	return errors.New("not implemented")
+func (s *SQLite) NewAccountTransaction(at *model.AccountTransaction) error {
+	var atid int
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("NewAccountTransaction.Begin -- %w", err)
+	}
+	defer tx.Rollback()
+
+	row := tx.QueryRow("INSERT INTO a_t (accountID,type,envelopeID,postDate,amount,cleared,memo) VALUES (?,?,?,?,?,?,?) RETURNING ID", at.AccountID, at.Typ, at.EnvelopeID, at.PostDate, at.Amount, at.Cleared, at.Memo)
+	if err := row.Scan(&atid); err != nil {
+		return fmt.Errorf("NewAccountTransaction.Insert.a_t.Scan -- %w", err)
+	}
+	at.ID = model.PKEY(atid)
+
+	if at.EnvelopeID > 0 {
+		if err := s.updateEnvelopeSummaries(tx, at.PostDate, at.EnvelopeID); err != nil {
+			return fmt.Errorf("NewAccountTransaction.updateEnvelopeSummaries -- %w", err)
+		}
+	}
+	if err := s.updateAccountSummaries(tx, at.PostDate, at.AccountID); err != nil {
+		return fmt.Errorf("NewAccountTransaction.updateAccountSummaries -- %w", err)
+	}
+	if err := s.updateSummaries(tx, at.PostDate); err != nil {
+		return fmt.Errorf("NewAccountTransaction.updateSummaries -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("NewAccountTransaction.Commit -- %w", err)
+	}
+
+	return nil
 }
-func (s *SQLite) UpdateAccountTransaction(model.AccountTransaction) error {
-	return errors.New("not implemented")
+func (s *SQLite) UpdateAccountTransaction(at model.AccountTransaction) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("NewAccountTransaction.Begin -- %w", err)
+	}
+	defer tx.Rollback()
+
+	var oldest bcdate.BCDate
+	var oldeid model.PKEY
+	row := tx.QueryRow("SELECT postDate, envelopeID FROM a_t WHERE ID = ?", at.ID)
+	if err := row.Scan(&oldest, &oldeid); err != nil {
+		return fmt.Errorf("NewAccountTransaction.Select.a_t.Scan -- %w", err)
+	}
+	oldest = bcdate.Oldest(oldest, at.PostDate)
+
+	_, err = tx.Exec("UPDATE a_t SET accountID = ?, type = ?, envelopeID = ?, postDate = ?, amount = ?, cleared = ?, memo = ? WHERE ID = ?", at.AccountID, at.Typ, at.EnvelopeID, at.PostDate, at.Amount, at.Cleared, at.Memo, at.ID)
+	if err != nil {
+		return fmt.Errorf("NewAccountTransaction.Update.a_t -- %w", err)
+	}
+
+	if at.EnvelopeID > 0 {
+		if err := s.updateEnvelopeSummaries(tx, oldest, at.EnvelopeID); err != nil {
+			return fmt.Errorf("NewAccountTransaction.updateEnvelopeSummaries -- %w", err)
+		}
+	}
+	if oldeid != at.EnvelopeID && oldeid > 0 {
+		if err := s.updateEnvelopeSummaries(tx, oldest, oldeid); err != nil {
+			return fmt.Errorf("NewAccountTransaction.updateEnvelopeSummaries.oldeid -- %w", err)
+		}
+	}
+
+	if err := s.updateAccountSummaries(tx, oldest, at.AccountID); err != nil {
+		return fmt.Errorf("NewAccountTransaction.updateAccountSummaries -- %w", err)
+	}
+	if err := s.updateSummaries(tx, oldest); err != nil {
+		return fmt.Errorf("DeleteAccountTransaction.updateSummaries -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("NewAccountTransaction.Commit -- %w", err)
+	}
+
+	return nil
 }
-func (s *SQLite) DeleteAccountTransaction(id model.PKEY) error { return errors.New("not implemented") }
+func (s *SQLite) DeleteAccountTransaction(id model.PKEY) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("DeleteAccountTransaction.Begin -- %w", err)
+	}
+	defer tx.Rollback()
+
+	var eid model.PKEY
+	var aid model.PKEY
+	var postdate bcdate.BCDate
+	row := tx.QueryRow("SELECT envelopeID, accountID, postDate FROM a_t WHERE ID = ?", id)
+	if err := row.Scan(&eid, &aid, &postdate); err != nil {
+		return fmt.Errorf("DeleteAccountTransaction.Select.a_t.Scan -- %w", err)
+	}
+
+	_, err = tx.Exec("DELETE FROM a_t WHERE ID = ?", id)
+	if err != nil {
+		return fmt.Errorf("DeleteAccountTransaction.Update.a_t -- %w", err)
+	}
+
+	if eid > 0 {
+		if err := s.updateEnvelopeSummaries(tx, postdate, eid); err != nil {
+			return fmt.Errorf("DeleteAccountTransaction.updateEnvelopeSummaries -- %w", err)
+		}
+	}
+
+	if err := s.updateAccountSummaries(tx, postdate, aid); err != nil {
+		return fmt.Errorf("DeleteAccountTransaction.updateAccountSummaries -- %w", err)
+	}
+	if err := s.updateSummaries(tx, bcdate.Epoch()); err != nil {
+		return fmt.Errorf("DeleteAccountTransaction.updateSummaries -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("DeleteAccountTransaction.Commit -- %w", err)
+	}
+
+	return nil
+}
 
 func (s *SQLite) GetAllEnvelopeTransactions(id model.PKEY) ([]model.EnvelopeTransaction, error) {
 	ets := make([]model.EnvelopeTransaction, 0)
@@ -536,7 +756,7 @@ func (s *SQLite) GetAllEnvelopeTransactions(id model.PKEY) ([]model.EnvelopeTran
 func (s *SQLite) GetEnvelopeTransactions(month bcdate.BCDate, id model.PKEY) ([]model.EnvelopeTransaction, error) {
 	ets := make([]model.EnvelopeTransaction, 0)
 
-	rows, err := s.db.Query("SELECT * FROM e_t WHERE envelopeID = ? AND mod(postDate,100) = ? ORDER BY postDate DESC", id, month)
+	rows, err := s.db.Query("SELECT * FROM e_t WHERE envelopeID = ? AND postDate-mod(postDate,100) = ? ORDER BY postDate DESC", id, month)
 	if err != nil {
 		return nil, fmt.Errorf("GetEnvelopeTransactions.Select -- %w", err)
 	}
@@ -559,13 +779,100 @@ func (s *SQLite) GetEnvelopeTransactions(month bcdate.BCDate, id model.PKEY) ([]
 	return ets, nil
 }
 
-func (s *SQLite) NewEnvelopeTransaction(*model.EnvelopeTransaction) error {
-	return errors.New("not implemented")
+func (s *SQLite) NewEnvelopeTransaction(et *model.EnvelopeTransaction) error {
+	var etid int
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("NewEnvelopeTransaction.Begin -- %w", err)
+	}
+	defer tx.Rollback()
+
+	row := tx.QueryRow("INSERT INTO e_t (envelopeID,postDate,amount) VALUES (?,?,?) RETURNING ID", et.EnvelopeID, et.PostDate, et.Amount)
+	if err := row.Scan(&etid); err != nil {
+		return fmt.Errorf("NewEnvelopeTransaction.Insert.a_t.Scan -- %w", err)
+	}
+	et.ID = model.PKEY(etid)
+
+	if err := s.updateEnvelopeSummaries(tx, et.PostDate, et.EnvelopeID); err != nil {
+		return fmt.Errorf("NewEnvelopeTransaction.updateEnvelopeSummaries -- %w", err)
+	}
+
+	if err := s.updateSummaries(tx, et.PostDate); err != nil {
+		return fmt.Errorf("NewEnvelopeTransaction.updateSummaries -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("NewEnvelopeTransaction.Commit -- %w", err)
+	}
+
+	return nil
 }
-func (s *SQLite) UpdateEnvelopeTransaction(model.EnvelopeTransaction) error {
-	return errors.New("not implemented")
+func (s *SQLite) UpdateEnvelopeTransaction(et model.EnvelopeTransaction) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("UpdateEnvelopeTransaction.Begin -- %w", err)
+	}
+	defer tx.Rollback()
+
+	var oldest bcdate.BCDate
+	row := tx.QueryRow("SELECT postDate FROM e_t WHERE ID = ?", et.ID)
+	if err := row.Scan(&oldest); err != nil {
+		return fmt.Errorf("UpdateEnvelopeTransaction.Select.e_t.Scan -- %w", err)
+	}
+	oldest = bcdate.Oldest(oldest, et.PostDate)
+
+	_, err = tx.Exec("UPDATE e_t SET envelopeID = ?, postDate = ?, amount = ? WHERE ID = ?", et.EnvelopeID, et.PostDate, et.Amount, et.ID)
+	if err != nil {
+		return fmt.Errorf("UpdateEnvelopeTransaction.Update.e_t -- %w", err)
+	}
+
+	if err := s.updateEnvelopeSummaries(tx, oldest, et.EnvelopeID); err != nil {
+		return fmt.Errorf("UpdateEnvelopeTransaction.updateEnvelopeSummaries -- %w", err)
+	}
+
+	if err := s.updateSummaries(tx, oldest); err != nil {
+		return fmt.Errorf("UpdateEnvelopeTransaction.updateSummaries -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("UpdateEnvelopeTransaction.Commit -- %w", err)
+	}
+
+	return nil
 }
-func (s *SQLite) DeleteEnvelopeTransaction(id model.PKEY) error { return errors.New("not implemented") }
+func (s *SQLite) DeleteEnvelopeTransaction(id model.PKEY) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelopeTransaction.Begin -- %w", err)
+	}
+	defer tx.Rollback()
+
+	var eid model.PKEY
+	var postdate bcdate.BCDate
+	row := tx.QueryRow("SELECT envelopeID, postDate FROM e_t WHERE ID = ?", id)
+	if err := row.Scan(&eid, &postdate); err != nil {
+		return fmt.Errorf("DeleteEnvelopeTransaction.Select.e_t.Scan -- %w", err)
+	}
+
+	_, err = tx.Exec("DELETE FROM e_t WHERE ID = ?", id)
+	if err != nil {
+		return fmt.Errorf("DeleteEnvelopeTransaction.Delete.e_t -- %w", err)
+	}
+
+	if err := s.updateEnvelopeSummaries(tx, postdate, eid); err != nil {
+		return fmt.Errorf("DeleteEnvelopeTransaction.updateEnvelopeSummaries -- %w", err)
+	}
+
+	if err := s.updateSummaries(tx, postdate); err != nil {
+		return fmt.Errorf("DeleteEnvelopeTransaction.updateSummaries -- %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("DeleteEnvelopeTransaction.Commit -- %w", err)
+	}
+
+	return nil
+}
 
 func (s *SQLite) GetAccountSummary(month bcdate.BCDate, id model.PKEY) (model.AccountSummary, error) {
 	summ := model.AccountSummary{}
@@ -576,7 +883,7 @@ func (s *SQLite) GetAccountSummary(month bcdate.BCDate, id model.PKEY) (model.Ac
 		&summ.Bal,
 		&summ.In,
 		&summ.Out,
-		&summ.Cleared,
+		&summ.Uncleared,
 	); err != nil {
 		return summ, fmt.Errorf("GetAccountSummary.Scan.a_chk -- %w", err)
 	}
@@ -659,11 +966,388 @@ func (s *SQLite) deleteDebtEnvelope(tx *sql.Tx, aID model.PKEY) error {
 }
 
 func (s *SQLite) updateAccountSummaries(tx *sql.Tx, oldest bcdate.BCDate, aID model.PKEY) error {
-	return errors.New("not implemented")
+	oldest = oldest - (oldest % 100)
+
+	var oldest_t bcdate.BCDate
+	var oldest_chk bcdate.BCDate
+	err := tx.QueryRow("SELECT min(postDate) FROM a_t WHERE accountID = ? AND postDate >= ?", aID, oldest).Scan(&oldest_t)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_t = oldest
+		} else {
+			return fmt.Errorf("updateAccountSummaries.Select.a_t.Min -- %w", err)
+		}
+	}
+	err = tx.QueryRow("SELECT min(month) FROM a_chk WHERE accountID = ? AND month >= ? AND month > 0", aID, oldest).Scan(&oldest_chk)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_chk = oldest
+		} else {
+			return fmt.Errorf("updateAccountSummaries.Select.a_chk.Min -- %w", err)
+		}
+	}
+	oldest = bcdate.Oldest(oldest_t-(oldest_t%100), oldest_chk-(oldest_chk%100))
+
+	if oldest == bcdate.Epoch() {
+		return nil
+	}
+
+	var latest_t bcdate.BCDate
+	var latest bcdate.BCDate
+	if err := tx.QueryRow("SELECT max(postDate) FROM a_t WHERE accountID = ?", aID).Scan(&latest_t); err != nil {
+		if err == sql.ErrNoRows {
+			latest_t = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateAccountSummaries.Select.a_t.Max -- %w", err)
+		}
+	}
+	if err := tx.QueryRow("SELECT max(month) FROM a_chk WHERE accountID = ? AND month > 0", aID).Scan(&latest); err != nil {
+		if err == sql.ErrNoRows {
+			latest = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateAccountSummaries.Select.a_chk.Max -- %w", err)
+		}
+	}
+	latest = bcdate.Latest(latest_t-(latest_t%100), latest-(latest%100))
+
+	for ; oldest <= latest; oldest += 100 {
+
+		var lastbal int
+		var bal int
+		var in int
+		var out int
+		var uncleared int
+
+		if err := tx.QueryRow("SELECT bal FROM a_chk WHERE accountID = ? AND month < ? ORDER BY month DESC LIMIT 1", aID, oldest).Scan(&lastbal); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateAccountSummaries.Select.a_chk.lastbal -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(amount) FROM a_t WHERE accountID = ? AND postDate-mod(postDate,100) = ? AND amount > 0", aID, oldest).Scan(&in); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateAccountSummaries.Select.a_t.in -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(amount) FROM a_t WHERE accountID = ? AND postDate-mod(postDate,100) = ? AND amount < 0", aID, oldest).Scan(&out); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateAccountSummaries.Select.a_t.out -- %w", err)
+			}
+		}
+		bal = lastbal + in + out
+		if err := tx.QueryRow("SELECT sum(amount) FROM a_t WHERE accountID = ? AND postDate-mod(postDate,100) = ? AND cleared = 0", aID, oldest).Scan(&uncleared); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateAccountSummaries.Select.a_t.uncleared -- %w", err)
+			}
+		}
+
+		_, err = tx.Exec("INSERT OR REPLACE a_chk (accountID,month,bal,in,out,uncleared) VALUES (?,?,?,?,?,?)", aID, oldest, bal, in, out, uncleared)
+		if err != nil {
+			return fmt.Errorf("updateAccountSummaries.Replace.a_chk -- %w", err)
+		}
+
+	}
+
+	return nil
 }
 func (s *SQLite) updateEnvelopeSummaries(tx *sql.Tx, oldest bcdate.BCDate, eID model.PKEY) error {
-	return errors.New("not implemented")
+	oldest = oldest - (oldest % 100)
+
+	var oldest_at bcdate.BCDate
+	var oldest_t bcdate.BCDate
+	var oldest_chk bcdate.BCDate
+	err := tx.QueryRow("SELECT min(postDate) FROM a_t WHERE envelopeID = ? AND postDate >= ?", eID, oldest).Scan(&oldest_at)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_at = oldest
+		} else {
+			return fmt.Errorf("updateEnvelopeSummaries.Select.a_t.Min -- %w", err)
+		}
+	}
+	err = tx.QueryRow("SELECT min(postDate) FROM e_t WHERE envelopeID = ? AND postDate >= ?", eID, oldest).Scan(&oldest_t)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_t = oldest
+		} else {
+			return fmt.Errorf("updateEnvelopeSummaries.Select.e_t.Min -- %w", err)
+		}
+	}
+	err = tx.QueryRow("SELECT min(month) FROM e_chk WHERE envelopeID = ? AND month >= ? AND month > 0", eID, oldest).Scan(&oldest_chk)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_chk = oldest
+		} else {
+			return fmt.Errorf("updateEnvelopeSummaries.Select.a_chk.Min -- %w", err)
+		}
+	}
+	oldest = bcdate.Oldest(oldest_at-(oldest_at%100), oldest_t-(oldest_t%100))
+	oldest = bcdate.Oldest(oldest, oldest_chk-(oldest_chk%100))
+
+	if oldest == bcdate.Epoch() {
+		return nil
+	}
+
+	var latest bcdate.BCDate
+	var latest_at bcdate.BCDate
+	var latest_t bcdate.BCDate
+	var latest_chk bcdate.BCDate
+	if err := tx.QueryRow("SELECT max(postDate) FROM a_t WHERE envelopeID = ?", eID).Scan(&latest_at); err != nil {
+		if err == sql.ErrNoRows {
+			latest_at = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateEnvelopeSummaries.Select.a_t.Max -- %w", err)
+		}
+	}
+	if err := tx.QueryRow("SELECT max(postDate) FROM e_t WHERE envelopeID = ?", eID).Scan(&latest_t); err != nil {
+		if err == sql.ErrNoRows {
+			latest_t = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateEnvelopeSummaries.Select.e_t.Max -- %w", err)
+		}
+	}
+	if err := tx.QueryRow("SELECT max(month) FROM e_chk WHERE envelopeID = ? AND month > 0", eID).Scan(&latest); err != nil {
+		if err == sql.ErrNoRows {
+			latest = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateEnvelopeSummaries.Select.e_chk.Max -- %w", err)
+		}
+	}
+	latest = bcdate.Latest(latest_at-(latest_at%100), latest_t-(latest_t%100))
+	latest = bcdate.Latest(latest, latest_chk-(latest_chk%100))
+
+	for ; oldest <= latest; oldest += 100 {
+
+		var lastbal int
+		var bal int
+		var in int
+		var in_a int
+		var out int
+		var out_a int
+
+		if err := tx.QueryRow("SELECT bal FROM e_chk WHERE envelopeID = ? AND month < ? ORDER BY month DESC LIMIT 1", eID, oldest).Scan(&lastbal); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateEnvelopeSummaries.Select.e_chk.lastbal -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(amount) FROM a_t WHERE envelopeID = ? AND postDate-mod(postDate,100) = ? AND amount > 0", eID, oldest).Scan(&in_a); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateEnvelopeSummaries.Select.a_t.in -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(amount) FROM a_t WHERE envelopeID = ? AND postDate-mod(postDate,100) = ? AND amount < 0", eID, oldest).Scan(&out_a); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateEnvelopeSummaries.Select.a_t.out -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(amount) FROM e_t WHERE envelopeID = ? AND postDate-mod(postDate,100) = ? AND amount > 0", eID, oldest).Scan(&in); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateEnvelopeSummaries.Select.e_t.in -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(amount) FROM e_t WHERE envelopeID = ? AND postDate-mod(postDate,100) = ? AND amount < 0", eID, oldest).Scan(&out); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateEnvelopeSummaries.Select.e_t.out -- %w", err)
+			}
+		}
+		bal = lastbal + in_a + out_a + in + out
+
+		_, err = tx.Exec("INSERT OR REPLACE e_chk (envelopeID,month,bal,in,out) VALUES (?,?,?,?,?)", eID, oldest, bal, in, out)
+		if err != nil {
+			return fmt.Errorf("updateEnvelopeSummaries.Replace.e_chk -- %w", err)
+		}
+
+	}
+
+	return nil
 }
 func (s *SQLite) updateSummaries(tx *sql.Tx, oldest bcdate.BCDate) error {
-	return errors.New("not implemented")
+	oldest = oldest - (oldest % 100)
+
+	var oldest_at bcdate.BCDate
+	var oldest_t bcdate.BCDate
+	var oldest_a_chk bcdate.BCDate
+	var oldest_e_chk bcdate.BCDate
+	err := tx.QueryRow("SELECT min(postDate) FROM a_t WHERE postDate >= ?", oldest).Scan(&oldest_at)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_at = oldest
+		} else {
+			return fmt.Errorf("updateSummaries.Select.a_t.Min -- %w", err)
+		}
+	}
+	err = tx.QueryRow("SELECT min(postDate) FROM e_t WHERE postDate >= ?", oldest).Scan(&oldest_t)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_t = oldest
+		} else {
+			return fmt.Errorf("updateSummaries.Select.e_t.Min -- %w", err)
+		}
+	}
+	err = tx.QueryRow("SELECT min(month) FROM a_chk WHERE month >= ? AND month > 0", oldest).Scan(&oldest_a_chk)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_a_chk = oldest
+		} else {
+			return fmt.Errorf("updateSummaries.Select.a_chk.Min -- %w", err)
+		}
+	}
+	err = tx.QueryRow("SELECT min(month) FROM e_chk WHERE month >= ? AND month > 0", oldest).Scan(&oldest_e_chk)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			oldest_e_chk = oldest
+		} else {
+			return fmt.Errorf("updateSummaries.Select.e_chk.Min -- %w", err)
+		}
+	}
+	oldest_t = bcdate.Oldest(oldest_at-(oldest_at%100), oldest_t-(oldest_t%100))
+	oldest = bcdate.Oldest(oldest_a_chk-(oldest_a_chk%100), oldest_e_chk-(oldest_e_chk%100))
+	oldest = bcdate.Oldest(oldest_t, oldest)
+
+	if oldest == bcdate.Epoch() {
+		return nil
+	}
+
+	var latest bcdate.BCDate
+	var latest_at bcdate.BCDate
+	var latest_t bcdate.BCDate
+	var latest_a_chk bcdate.BCDate
+	var latest_e_chk bcdate.BCDate
+	if err := tx.QueryRow("SELECT max(postDate) FROM a_t").Scan(&latest_at); err != nil {
+		if err == sql.ErrNoRows {
+			latest_at = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateSummaries.Select.a_t.Max -- %w", err)
+		}
+	}
+	if err := tx.QueryRow("SELECT max(postDate) FROM e_t").Scan(&latest_t); err != nil {
+		if err == sql.ErrNoRows {
+			latest_t = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateSummaries.Select.e_t.Max -- %w", err)
+		}
+	}
+	if err := tx.QueryRow("SELECT max(month) FROM e_chk WHERE month > 0").Scan(&latest_e_chk); err != nil {
+		if err == sql.ErrNoRows {
+			latest = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateSummaries.Select.e_chk.Max -- %w", err)
+		}
+	}
+	if err := tx.QueryRow("SELECT max(month) FROM a_chk WHERE month > 0").Scan(&latest_a_chk); err != nil {
+		if err == sql.ErrNoRows {
+			latest = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateSummaries.Select.a_chk.Max -- %w", err)
+		}
+	}
+	if err := tx.QueryRow("SELECT max(month) FROM s_chk WHERE month > 0").Scan(&latest); err != nil {
+		if err == sql.ErrNoRows {
+			latest = bcdate.CurrentMonth()
+		} else {
+			return fmt.Errorf("updateSummaries.Select.a_chk.Max -- %w", err)
+		}
+	}
+	latest_t = bcdate.Latest(latest_at-(latest_at%100), latest_t-(latest_t%100))
+	latest_a_chk = bcdate.Latest(latest_a_chk-(latest_a_chk%100), latest_e_chk-(latest_e_chk%100))
+	latest = bcdate.Latest(latest, latest_t)
+	latest = bcdate.Latest(latest, latest_a_chk)
+
+	var es []model.PKEY
+	var as []model.PKEY
+
+	rows, err := tx.Query("SELECT ID FROM a")
+	if err != nil {
+		return fmt.Errorf("updateSummaries.Select.a.ID -- %w", err)
+	}
+	for rows.Next() {
+		var aid model.PKEY
+		if err := rows.Scan(
+			&aid,
+		); err != nil {
+			return fmt.Errorf("updateSummaries.Select.a.ID.Scan -- %w", err)
+		}
+		as = append(as, aid)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("updateSummaries.Select.a.ID.Err -- %w", err)
+	}
+	rows.Close()
+
+	rows, err = tx.Query("SELECT ID FROM e")
+	if err != nil {
+		return fmt.Errorf("updateSummaries.Select.e.ID -- %w", err)
+	}
+	for rows.Next() {
+		var eid model.PKEY
+		if err := rows.Scan(
+			&eid,
+		); err != nil {
+			return fmt.Errorf("updateSummaries.Select.e.ID.Scan -- %w", err)
+		}
+		es = append(es, eid)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("updateSummaries.Select.e.ID.Err -- %w", err)
+	}
+	rows.Close()
+
+	for ; oldest <= latest; oldest += 100 {
+
+		var a_bal int
+		var e_bal int
+
+		if err := tx.QueryRow("SELECT sum(bal) FROM ( SELECT bal, max(month) FROM a_chk JOIN a ON a_chk.accountID = a.ID WHERE month <= ? AND debt = 0 AND offbudget = 0 GROUP BY accountID )", oldest).Scan(&a_bal); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateSummaries.Select.a_chk.debt.bal -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(bal) FROM ( SELECT bal, max(month) FROM e_chk WHERE month <= ? GROUP BY envelopeID )", oldest).Scan(&e_bal); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateSummaries.Select.e_chk.bal -- %w", err)
+			}
+		}
+
+		var float int = a_bal - e_bal
+
+		var banked int
+		if err := tx.QueryRow("SELECT sum(bal) FROM ( SELECT bal, max(month) FROM a_chk JOIN a ON a_chk.accountID = a.ID WHERE month <= ? AND offbudget = 0 GROUP BY accountID )", oldest).Scan(&banked); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateSummaries.Select.a_chk.debt.bal -- %w", err)
+			}
+		}
+
+		var nw int
+		if err := tx.QueryRow("SELECT sum(bal) FROM ( SELECT bal, max(month) FROM a_chk WHERE month <= ? GROUP BY accountID )", oldest).Scan(&nw); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateSummaries.Select.a_chk.banked -- %w", err)
+			}
+		}
+
+		var inc int
+		var exp int
+		var delta int
+
+		if err := tx.QueryRow("SELECT sum(amount) FROM a_t WHERE postDate-mod(postDate,100) = ? AND type = 1", oldest).Scan(&inc); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateSummaries.Select.inc -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(amount) FROM a_t WHERE postDate-mod(postDate,100) = ? AND type = 0 AND amount < 0", oldest).Scan(&exp); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateSummaries.Select.inc -- %w", err)
+			}
+		}
+		if err := tx.QueryRow("SELECT sum(amount) FROM a_t WHERE postDate-mod(postDate,100) = ? AND type = 0", oldest).Scan(&delta); err != nil {
+			if err != sql.ErrNoRows {
+				return fmt.Errorf("updateSummaries.Select.inc -- %w", err)
+			}
+		}
+
+		_, err = tx.Exec("INSERT OR REPLACE s_chk (month,float,income,expenses,delta,banked,netWorth) VALUES (?,?,?,?,?,?,?)", oldest, float, inc, exp, delta, banked, nw)
+		if err != nil {
+			return fmt.Errorf("updateEnvelopeSummaries.Replace.e_chk -- %w", err)
+		}
+
+	}
+
+	return nil
 }

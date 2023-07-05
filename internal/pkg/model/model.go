@@ -57,10 +57,10 @@ type AccountSummary struct {
 	AccountID PKEY
 	Month     bcdate.BCDate
 
-	Bal     int
-	In      int
-	Out     int
-	Cleared int
+	Bal       int
+	In        int
+	Out       int
+	Uncleared int
 }
 
 type EnvelopeGroup struct {
@@ -97,7 +97,7 @@ type Envelope struct {
 
 type EnvelopeTransaction struct {
 	ID         PKEY
-	EnvelopeID uint
+	EnvelopeID PKEY
 	PostDate   bcdate.BCDate
 	Amount     int
 }
