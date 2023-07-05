@@ -21,6 +21,8 @@ func NewSQLite() DB {
 	return &SQLite{nil}
 }
 
+// TODO: Pass over all calls and queries to use NullXxx variables instead
+
 func (s *SQLite) Open(dbname string) error {
 	_, err := os.Stat(dbname)
 
