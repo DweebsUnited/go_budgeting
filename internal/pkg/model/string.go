@@ -76,8 +76,8 @@ func (e Envelope) String() string {
 		ret += "X"
 	}
 	ret += fmt.Sprintf("=%d/%d", e.GoalAmt, e.GoalTgt)
-	if e.DebtAccount > 0 {
-		ret += fmt.Sprintf(" -> %03d", e.DebtAccount)
+	if e.DebtAccount.Valid {
+		ret += fmt.Sprintf(" -> %03d", e.DebtAccount.Int32)
 	}
 	return ret
 }

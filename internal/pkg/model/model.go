@@ -2,12 +2,13 @@ package model
 
 import (
 	"budgeting/internal/pkg/bcdate"
+	"database/sql"
 )
 
 // All structure definitions should go here
 // This is the M of MVC
 
-type PKEY uint
+type PKEY int32
 
 type AccountClass uint16
 
@@ -20,7 +21,8 @@ const (
 )
 
 type Account struct {
-	ID        PKEY
+	ID PKEY
+
 	Hidden    bool
 	Offbudget bool
 	Debt      bool
@@ -42,7 +44,7 @@ const (
 type AccountTransaction struct {
 	ID         PKEY
 	AccountID  PKEY
-	EnvelopeID PKEY
+	EnvelopeID sql.NullInt32
 
 	Typ TransactionType
 
@@ -82,7 +84,7 @@ type Envelope struct {
 	ID      PKEY
 	GroupID PKEY
 
-	DebtAccount PKEY
+	DebtAccount sql.NullInt32
 	Hidden      bool
 
 	Name  string
