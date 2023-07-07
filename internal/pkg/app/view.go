@@ -1,18 +1,24 @@
 package app
 
 import (
+	"budgeting/internal/pkg/bcdate"
+	"budgeting/internal/pkg/db"
+	"budgeting/internal/pkg/middleware/querymonth"
 	"budgeting/internal/pkg/shiftpath"
+	"fmt"
 	"net/http"
+	"text/template"
 )
 
 // TODO: Handler for View endpoints
 // Call Controllers, then render the outputs
 type ViewHandler struct {
+	sdb db.DB
 }
 
-func NewViewHandler() http.Handler {
+func NewViewHandler(sdb db.DB) http.Handler {
 
-	return &ViewHandler{}
+	return &ViewHandler{sdb}
 
 }
 
@@ -83,9 +89,26 @@ func (h *ViewHandler) ServeHTTP_envelopes(w http.ResponseWriter, r *http.Request
 }
 
 func (h *ViewHandler) ServeHTTP_snip_summary(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("/view/summary"))
-
 	// TODO: Render and return summary bar
+
+	month := querymonth.GetQM(r)
+
+	summ, err := h.sdb.GetOverallSummary(bcdate.BCDate(month))
+
+	if err != nil {
+		panic(fmt.Errorf("failed to get overall summary from DB -- %w", err))
+	}
+
+	// TODO: Load all templates on startup
+	// This is faster for debugging though..
+	tmpl, err := template.New("summary").ParseFiles("web/template/summary.tmpl")
+	if err != nil {
+		panic(fmt.Errorf("failed to parse template -- %w", err))
+	}
+	err = tmpl.Execute(w, summ)
+	if err != nil {
+		panic(fmt.Errorf("failed to execute template -- %w", err))
+	}
 }
 
 func (h *ViewHandler) ServeHTTP_snip_account(w http.ResponseWriter, r *http.Request, tail string) {

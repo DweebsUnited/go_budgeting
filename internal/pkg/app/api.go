@@ -1,6 +1,7 @@
 package app
 
 import (
+	"budgeting/internal/pkg/db"
 	"budgeting/internal/pkg/shiftpath"
 	"net/http"
 )
@@ -8,10 +9,11 @@ import (
 // TODO: Handler for API endpoints
 // Call Controllers, then dump the result to JSON
 type APIHandler struct {
+	sdb db.DB
 }
 
-func NewAPIHandler() http.Handler {
-	return &APIHandler{}
+func NewAPIHandler(sdb db.DB) http.Handler {
+	return &APIHandler{sdb}
 }
 
 func (h *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {

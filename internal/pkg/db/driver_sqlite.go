@@ -36,6 +36,11 @@ func (s *SQLite) Open(dbname string) error {
 			return s.Init()
 		}
 
+		_, err = s.db.Exec("PRAGMA foreign_keys = ON")
+		if err != nil {
+			return fmt.Errorf("failed to enable foreign key handling: %w", err)
+		}
+
 		return nil
 	} else {
 		return fmt.Errorf("failed to stat file: %w", err)
