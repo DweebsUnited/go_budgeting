@@ -52,6 +52,10 @@ func (s *SQLite) Init() error {
 		return fmt.Errorf("cannot init DB before opening")
 	}
 
+	if _, err := s.db.Exec(string("PRAGMA foreign_keys = OFF")); err != nil {
+		return fmt.Errorf("failed disabling foreign keys: %w", err)
+	}
+
 	query, err := ioutil.ReadFile("init/sqlite3.sql")
 	if err != nil {
 		return fmt.Errorf("failed reading DB setup file: %w", err)
@@ -59,6 +63,10 @@ func (s *SQLite) Init() error {
 
 	if _, err := s.db.Exec(string(query)); err != nil {
 		return fmt.Errorf("failed running DB setup command: %w", err)
+	}
+
+	if _, err := s.db.Exec(string("PRAGMA foreign_keys = ON")); err != nil {
+		return fmt.Errorf("failed re-enabling foreign keys: %w", err)
 	}
 
 	return nil

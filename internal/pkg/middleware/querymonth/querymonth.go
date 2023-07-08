@@ -3,6 +3,7 @@ package querymonth
 import (
 	"budgeting/internal/pkg/bcdate"
 	"context"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -38,6 +39,7 @@ func (h *QueryMonth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// If valid was found, we returned above
 	// Construct today
+	log.Print("Missing or mal-parsed date, use today")
 	qm := int(bcdate.CurrentMonth())
 	h.next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), queryMonthKey, qm)))
 

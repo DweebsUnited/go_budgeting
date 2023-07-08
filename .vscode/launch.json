@@ -9,15 +9,17 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "./cmd/server"
+            "program": "./cmd/server",
+            "cwd": "D:\\Projects\\go_budgeting"
         },
         {
             "name": "Querytool",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "args": ["D:\\Projects\\go_budgeting\\bin\\db.db", "upd", "a", "--id", "1", "--sbal", "100"],
-            "program": "./tools/querytool"
+            "args": ["bin\\db.db", "upd", "a", "--id", "1", "--sbal", "100"],
+            "program": "./tools/querytool",
+            "cwd": "D:\\Projects\\go_budgeting"
         }
     ]
 }

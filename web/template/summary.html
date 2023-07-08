@@ -1,0 +1,77 @@
+<div id="summary">
+    <style>
+        .container {
+            border: thin solid grey;
+            border-bottom: 0;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            text-align: center;
+        }
+        .child {
+            padding: 0em 1em;
+            flex: 1;
+            flex-direction: column;
+            border-bottom: thin solid grey;
+        }
+        .noflex {
+            flex-grow: 0;
+        }
+        h1 {
+            margin: 0;
+        }
+        h3 {
+            margin: 0;
+        }
+        .divide {
+            border-right: thin solid black;
+        }
+        .center {
+            text-align: center;
+        }
+    </style>
+
+    <div class="container">
+        <div class="child divide">
+            <div class="center"><h3>Float</h3></div>
+            <div class="center"><h1>{{FmtVal .Float}}</h1></div>
+        </div>
+        <div class="child">
+            <div class="center"><h3>Income</h3></div>
+            <div class="center"><h1>{{FmtVal .Income}}</h1></div>
+        </div>
+        <div class="child noflex" style="padding: 0;">
+            <div class="center"><h1>-</h1></div>
+        </div>
+        <div class="child">
+            <div class="center"><h3>Expenses</h3></div>
+            <div class="center"><h1>{{FmtVal .Expenses}}</h1></div>
+        </div>
+        <div class="child noflex" style="padding: 0;">
+            <div class="center"><h1>-</h1></div>
+        </div>
+        <div class="child">
+            <div class="center"><h3>Offbuget</h3></div>
+            <div class="center"><h1>{{.Missing | FmtVal}}</h1></div>
+        </div>
+        <div class="child noflex" style="padding: 0;">
+            <div class="center"><h1>=</h1></div>
+        </div>
+        <div class="child divide">
+            <div class="center"><h3>Gain</h3></div>
+            <div class="center"><h1>{{.Gain | FmtVal}}</h1></div>
+        </div>
+        <div class="child divide">
+            <div class="center"><h3>Delta</h3></div>
+            <div class="center"><h1>{{FmtVal .Delta}}</h1></div>
+        </div>
+        <div class="child divide">
+            <div class="center"><h3>Banked</h3></div>
+            <div class="center"><h1>{{FmtVal .Banked}}</h1></div>
+        </div>
+        <div class="child">
+            <div class="center"><h3>Net Worth</h3></div>
+            <div class="center"><h1>{{FmtVal .NetWorth}}</h1></div>
+        </div>
+    </div>
+</div>

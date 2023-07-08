@@ -121,6 +121,9 @@ INSERT INTO sqlite_sequence (name, seq) VALUES ('e_grp', 0);
 INSERT INTO sqlite_sequence (name, seq) VALUES ('e', 0);
 INSERT INTO sqlite_sequence (name, seq) VALUES ('e_t', 0);
 
+-- Initial summary
+INSERT INTO s_chk (month) VALUES (0);
+
 -- Default Envelope Groups
 INSERT INTO e_grp (name,sort) VALUES ('Misc', 999);
 INSERT INTO e_grp (name,sort) VALUES ('Monthly Bills', 100);
