@@ -1,6 +1,8 @@
 {{template "header.html" .}}
 
 <tr>
+    <th>On-Budget</th>
+    <th>Debt</th>
     <th>Institution</th>
     <th>Account</th>
     <th>Balance</th>
@@ -8,8 +10,11 @@
     <th>Out</th>
     <th>Uncleared</th>
 </tr>
-{{range $id, $elem := .AS}}
+{{range $id := .AIDs}}
+{{with $elem := index $.AS $id}}
 <tr>
+    <td>{{if not $elem.A.Offbudget}}&#10003;{{end}}</td>
+    <td>{{if $elem.A.Debt}}&#10003;{{end}}</td>
     <td>{{$elem.A.Institution}}</td>
     <td><a href="/account/{{$id}}?qm={{$.QM.FmtMonth}}">{{$elem.A.Name}}</a></td>
     <td>{{FmtVal $elem.S.Bal}}</td>
@@ -17,6 +22,7 @@
     <td>{{FmtVal $elem.S.Out}}</td>
     <td>{{FmtVal $elem.S.Uncleared}}</td>
 </tr>
+{{end}}
 {{end}}
 
 {{template "footer.html" .}}

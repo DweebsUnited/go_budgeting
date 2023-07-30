@@ -314,7 +314,7 @@ func main() {
 
 	log.Printf("Migrate Account Transactions")
 
-	rows, err = bdb.Query("SELECT AT.account_id, AT.posted, AT.amount, AT.memo, AT.general_cat, AT.cleared, BT.bucket_id FROM account_transaction AT LEFT JOIN bucket_transaction BT ON BT.account_trans_id = AT.id")
+	rows, err = bdb.Query("SELECT AT.account_id, AT.posted, AT.amount, AT.memo, AT.general_cat, AT.cleared, AT.fi_id, BT.bucket_id FROM account_transaction AT LEFT JOIN bucket_transaction BT ON BT.account_trans_id = AT.id")
 	if err != nil {
 		log.Fatalf("Failed to query account transactions: %s", err.Error())
 	}
@@ -327,6 +327,7 @@ func main() {
 			Memo      string
 			Category  string
 			Cleared   bool
+			FI_ID     sql.NullString
 			BucketID  sql.NullInt32
 		}
 		if err := rows.Scan(
@@ -336,6 +337,7 @@ func main() {
 			&t.Memo,
 			&t.Category,
 			&t.Cleared,
+			&t.FI_ID,
 			&t.BucketID,
 		); err != nil {
 			log.Fatalf("Failed to scan next account transaction: %s", err.Error())
@@ -344,7 +346,7 @@ func main() {
 		nt := model.AccountTransaction{
 			AccountID: a_map[t.AccountID],
 			Amount:    t.Amount,
-			Cleared:   t.Cleared,
+			Cleared:   t.Cleared || t.FI_ID.Valid, // Buckets treats imported transactions as cleared
 			Memo:      t.Memo,
 		}
 
@@ -358,6 +360,11 @@ func main() {
 			nt.Typ = model.TT_INCOME
 		case "transfer":
 			nt.Typ = model.TT_TRANSFER
+		}
+
+		// Buckets marks account adjustments as a normal transaction with a specific Memo
+		if t.Memo == "Update account balance" {
+			nt.Typ = model.TT_ADJUST
 		}
 
 		match := bucketspostdate.FindStringSubmatch(t.Posted)

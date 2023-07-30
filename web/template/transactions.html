@@ -8,7 +8,7 @@
     <th>Amount</th>
     <th>Memo</th>
 </tr>
-{{range $id, $elem := .AT}}
+{{range $id, $elem := .ATs}}
 <tr>
     <td>{{if $elem.Cleared}}&#10003;{{else}}&#10060;{{end}}</td>
     <td>{{$elem.PostDate.FmtDate}}</td>

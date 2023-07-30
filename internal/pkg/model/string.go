@@ -52,7 +52,7 @@ func (tt TransactionType) String() string {
 	case TT_TRANSFER:
 		return "Transfer"
 	case TT_ADJUST:
-		return "Adjustment"
+		return "Adjust"
 	default:
 		return "UNKNOWN"
 	}

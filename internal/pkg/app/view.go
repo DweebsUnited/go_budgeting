@@ -100,6 +100,8 @@ func (h *ViewHandler) ServeHTTP_accounts(w http.ResponseWriter, r *http.Request)
 		S model.AccountSummary
 	}
 
+	aids := make([]model.PKEY, 0)
+
 	accts, err := h.sdb.GetAccounts()
 	if err != nil {
 		panic(fmt.Errorf("failed to get account list -- %w", err))
@@ -114,6 +116,7 @@ func (h *ViewHandler) ServeHTTP_accounts(w http.ResponseWriter, r *http.Request)
 		}
 
 		acctSumm[acct.ID] = as{acct, s}
+		aids = append(aids, acct.ID)
 	}
 
 	summ, err := h.sdb.GetOverallSummary(month)
@@ -122,15 +125,17 @@ func (h *ViewHandler) ServeHTTP_accounts(w http.ResponseWriter, r *http.Request)
 	}
 
 	err = h.tmpl.ExecuteTemplate(w, "accounts.html", struct {
-		URL string
-		QM  bcdate.BCDate
-		S   model.Summary
-		AS  map[model.PKEY]as
+		URL  string
+		QM   bcdate.BCDate
+		S    model.Summary
+		AS   map[model.PKEY]as
+		AIDs []model.PKEY
 	}{
-		URL: "/accounts",
-		QM:  month,
-		S:   summ,
-		AS:  acctSumm,
+		URL:  "/accounts",
+		QM:   month,
+		S:    summ,
+		AS:   acctSumm,
+		AIDs: aids,
 	})
 	if err != nil {
 		panic(fmt.Errorf("failed to execute template -- %w", err))
@@ -139,9 +144,58 @@ func (h *ViewHandler) ServeHTTP_accounts(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ViewHandler) ServeHTTP_transactions(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("/transactions"))
+	// Render and return transaction list
 
-	// TODO: Render and return transaction list
+	month := bcdate.BCDate(querymonth.GetQM(r))
+
+	summ, err := h.sdb.GetOverallSummary(month)
+	if err != nil {
+		panic(fmt.Errorf("failed to get overall summary from DB -- %w", err))
+	}
+
+	as := make(map[model.PKEY]string)
+	es := make(map[model.PKEY]string)
+
+	if accts, err := h.sdb.GetAccounts(); err == nil {
+		for _, acct := range accts {
+			as[acct.ID] = acct.Name
+		}
+	} else {
+		panic(fmt.Errorf("failed to get account list -- %w", err))
+	}
+
+	if envs, err := h.sdb.GetEnvelopes(); err == nil {
+		for _, env := range envs {
+			es[env.ID] = env.Name
+		}
+	} else {
+		panic(fmt.Errorf("failed to get envelope list -- %w", err))
+	}
+
+	atList, err := h.sdb.GetAllTransactions(month)
+	if err != nil {
+		panic(fmt.Errorf("failed to get transaction list -- %w", err))
+	}
+
+	err = h.tmpl.ExecuteTemplate(w, "transactions.html", struct {
+		URL string
+		QM  bcdate.BCDate
+		S   model.Summary
+		AS  map[model.PKEY]string
+		ES  map[model.PKEY]string
+		ATs []model.AccountTransaction
+	}{
+		URL: "/transactions",
+		QM:  month,
+		S:   summ,
+		AS:  as,
+		ES:  es,
+		ATs: atList,
+	})
+	if err != nil {
+		panic(fmt.Errorf("failed to execute template -- %w", err))
+	}
+
 }
 
 func (h *ViewHandler) ServeHTTP_envelopes(w http.ResponseWriter, r *http.Request) {
