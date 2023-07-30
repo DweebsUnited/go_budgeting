@@ -1,8 +1,34 @@
 {{template "header.html" .}}
 
-<tr>
-</tr>
-<tr>
-</tr>
+<table>
+    {{range $gid := .EGs}}
+    {{with $ege := index $.EGEs $gid}}
+    <tr>
+        <th>Name</th>
+        <th>Balance</th>
+        <th>Want</th>
+        <th>In</th>
+        <th>Activity</th>
+    </tr>
+    <tr>
+        <th>{{$ege.G.Name}}</th>
+        <th>{{FmtVal $ege.GS.Bal}}</th>
+        <th>{{FmtVal $ege.GE.GoalTgt}}</th>
+        <th>{{FmtVal $ege.GS.In}}</th>
+        <th>{{FmtVal $ege.GS.Out}}</th>
+    </tr>
+    {{range $elem := index $ege.Es }}
+    <tr>
+        <td>{{$elem.E.Name}}</td>
+        <td>{{FmtVal $elem.S.Bal}}</td>
+        <td>{{$elem.E.GoalWant $elem.S.Bal | FmtVal}}</td>
+        <td>{{FmtVal $elem.S.In}}</td>
+        <td>{{FmtVal $elem.S.Out}}</td>
+    </tr>
+    {{end}}
+
+    {{end}}
+    {{end}}
+</table>
 
 {{template "footer.html" .}}

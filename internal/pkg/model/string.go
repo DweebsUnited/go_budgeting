@@ -102,7 +102,9 @@ func (s EnvelopeSummary) String() string {
 }
 
 func FormatVal(v int) string {
-	if v < 0 {
+	if v == 0 {
+		return "-"
+	} else if v < 0 {
 		return fmt.Sprintf("$\u00A0(%.2f)", float32(-v)/100.0)
 	} else {
 		return fmt.Sprintf("$\u00A0%.2f", float32(v)/100.0)

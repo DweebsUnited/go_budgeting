@@ -1,22 +1,24 @@
 {{template "header.html" .}}
 
-<tr>
-    <th>Cleared</th>
-    <th>Post Date</th>
-    <th>Envelope</th>
-    <th>Type</th>
-    <th>Amount</th>
-    <th>Memo</th>
-</tr>
-{{range $id, $elem := .ATs}}
-<tr>
-    <td>{{if $elem.Cleared}}&#10003;{{else}}&#10060;{{end}}</td>
-    <td>{{$elem.PostDate.FmtDate}}</td>
-    <td>{{if $elem.EnvelopeID.Valid}}{{index $.ES $elem.EnvelopeID.Int32}}{{end}}</td>
-    <td>{{$elem.Typ}}</td>
-    <td>{{FmtVal $elem.Amount}}</td>
-    <td>{{$elem.Memo}}</td>
-</tr>
-{{end}}
+<table>
+    <tr>
+        <th>Cleared</th>
+        <th>Post Date</th>
+        <th>Envelope</th>
+        <th>Type</th>
+        <th>Amount</th>
+        <th>Memo</th>
+    </tr>
+    {{range $id, $elem := .ATs}}
+    <tr>
+        <td>{{if $elem.Cleared}}&#10003;{{else}}&#10060;{{end}}</td>
+        <td>{{$elem.PostDate.FmtDate}}</td>
+        <td>{{if $elem.EnvelopeID.Valid}}{{index $.ES $elem.EnvelopeID.Int32}}{{end}}</td>
+        <td>{{$elem.Typ}}</td>
+        <td>{{FmtVal $elem.Amount}}</td>
+        <td>{{$elem.Memo}}</td>
+    </tr>
+    {{end}}
+</table>
 
 {{template "footer.html" .}}

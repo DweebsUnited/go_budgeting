@@ -1236,7 +1236,7 @@ func (s *SQLite) updateEnvelopeSummaries(tx *sql.Tx, start bcdate.BCDate, eID mo
 		}
 		bal = lastbal + in_a + out_a + in + out
 
-		_, err = tx.Exec("INSERT OR REPLACE INTO e_chk (envelopeID,month,bal,\"in\",out) VALUES (?,?,?,?,?)", eID, oldest, bal, in, out)
+		_, err = tx.Exec("INSERT OR REPLACE INTO e_chk (envelopeID,month,bal,\"in\",out) VALUES (?,?,?,?,?)", eID, oldest, bal, in+out, in_a+out_a)
 		if err != nil {
 			return fmt.Errorf("updateEnvelopeSummaries.Replace.e_chk -- %w", err)
 		}

@@ -97,6 +97,20 @@ type Envelope struct {
 	Sort int
 }
 
+func (e Envelope) GoalWant(bal int) int {
+	switch e.Goal {
+	case GT_RECUR:
+		return e.GoalAmt
+	case GT_TGT:
+		return e.GoalTgt
+	case GT_RECTIL:
+		if bal < e.GoalTgt {
+			return e.GoalAmt
+		}
+	}
+	return 0
+}
+
 type EnvelopeTransaction struct {
 	ID         PKEY
 	EnvelopeID PKEY

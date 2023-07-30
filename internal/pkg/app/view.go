@@ -199,9 +199,87 @@ func (h *ViewHandler) ServeHTTP_transactions(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ViewHandler) ServeHTTP_envelopes(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("/envelopes"))
+	// Render and return envelope list
 
-	// TODO: Render and return envelope list
+	month := bcdate.BCDate(querymonth.GetQM(r))
+
+	summ, err := h.sdb.GetOverallSummary(month)
+	if err != nil {
+		panic(fmt.Errorf("failed to get overall summary from DB -- %w", err))
+	}
+
+	type esum struct {
+		E model.Envelope
+		S model.EnvelopeSummary
+	}
+	type ege struct {
+		G  model.EnvelopeGroup
+		GS model.EnvelopeSummary
+		GE model.Envelope
+		Es []esum
+	}
+
+	eges := make(map[model.PKEY]ege)
+	egids := make([]model.PKEY, 0)
+
+	egs, err := h.sdb.GetEnvelopeGroups()
+	if err != nil {
+		panic(fmt.Errorf("failed to get envelope groups -- %w", err))
+	}
+
+	for _, eg := range egs {
+		summ := model.EnvelopeSummary{}
+
+		es, err := h.sdb.GetEnvelopesInGroup(eg.ID)
+		if err != nil {
+			panic(fmt.Errorf("failed to get envelopes in group -- %w", err))
+		}
+
+		ess := make([]esum, 0)
+
+		ggoal := 0
+
+		for _, e := range es {
+			sum, err := h.sdb.GetEnvelopeSummary(month, e.ID)
+			if err != nil {
+				panic(fmt.Errorf("failed to get envelope summary -- %w", err))
+			}
+
+			ess = append(ess, esum{e, sum})
+
+			summ.Bal += sum.Bal
+			summ.In += sum.In
+			summ.Out += sum.Out
+
+			ggoal += e.GoalWant(sum.Bal)
+		}
+
+		eges[eg.ID] = ege{
+			G:  eg,
+			GS: summ,
+			GE: model.Envelope{Goal: model.GT_TGT, GoalTgt: ggoal},
+			Es: ess,
+		}
+		egids = append(egids, eg.ID)
+	}
+
+	err = h.tmpl.ExecuteTemplate(w, "envelopes.html", struct {
+		URL  string
+		QM   bcdate.BCDate
+		S    model.Summary
+		EGs  []model.PKEY
+		EGEs map[model.PKEY]ege
+	}{
+		URL:  "/envelopes",
+		QM:   month,
+		S:    summ,
+		EGs:  egids,
+		EGEs: eges,
+	})
+	if err != nil {
+		panic(fmt.Errorf("failed to execute template -- %w", err))
+	}
+
 }
 
 func (h *ViewHandler) ServeHTTP_snip_summary(w http.ResponseWriter, r *http.Request) {
@@ -218,6 +296,7 @@ func (h *ViewHandler) ServeHTTP_snip_summary(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		panic(fmt.Errorf("failed to execute template -- %w", err))
 	}
+
 }
 
 func (h *ViewHandler) ServeHTTP_account(w http.ResponseWriter, r *http.Request, tail string) {
