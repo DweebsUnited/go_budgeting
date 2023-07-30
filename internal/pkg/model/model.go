@@ -123,9 +123,9 @@ type Summary struct {
 }
 
 func (s Summary) Gain() int {
-	return s.Income - s.Expenses
+	return s.Income + s.Expenses
 }
 
 func (s Summary) Missing() int {
-	return s.Delta - (s.Income - s.Expenses)
+	return s.Delta - s.Income - s.Expenses
 }

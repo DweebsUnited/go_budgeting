@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
 )
 
 // TODO: Handler for View endpoints
@@ -92,17 +93,12 @@ func (h *ViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *ViewHandler) ServeHTTP_accounts(w http.ResponseWriter, r *http.Request) {
 	// Render and return account list
 
+	month := bcdate.BCDate(querymonth.GetQM(r))
+
 	type as struct {
 		A model.Account
 		S model.AccountSummary
 	}
-	type asv struct {
-		QM bcdate.BCDate
-		AS map[model.PKEY]as
-		S  model.Summary
-	}
-
-	month := bcdate.BCDate(querymonth.GetQM(r))
 
 	accts, err := h.sdb.GetAccounts()
 	if err != nil {
@@ -120,12 +116,22 @@ func (h *ViewHandler) ServeHTTP_accounts(w http.ResponseWriter, r *http.Request)
 		acctSumm[acct.ID] = as{acct, s}
 	}
 
-	summ, err := h.sdb.GetOverallSummary(bcdate.BCDate(month))
+	summ, err := h.sdb.GetOverallSummary(month)
 	if err != nil {
 		panic(fmt.Errorf("failed to get overall summary from DB -- %w", err))
 	}
 
-	err = h.tmpl.ExecuteTemplate(w, "accounts.html", asv{QM: month, AS: acctSumm, S: summ})
+	err = h.tmpl.ExecuteTemplate(w, "accounts.html", struct {
+		URL string
+		QM  bcdate.BCDate
+		S   model.Summary
+		AS  map[model.PKEY]as
+	}{
+		URL: "/accounts",
+		QM:  month,
+		S:   summ,
+		AS:  acctSumm,
+	})
 	if err != nil {
 		panic(fmt.Errorf("failed to execute template -- %w", err))
 	}
@@ -147,9 +153,9 @@ func (h *ViewHandler) ServeHTTP_envelopes(w http.ResponseWriter, r *http.Request
 func (h *ViewHandler) ServeHTTP_snip_summary(w http.ResponseWriter, r *http.Request) {
 	// Render and return summary bar
 
-	month := querymonth.GetQM(r)
+	month := bcdate.BCDate(querymonth.GetQM(r))
 
-	summ, err := h.sdb.GetOverallSummary(bcdate.BCDate(month))
+	summ, err := h.sdb.GetOverallSummary(month)
 	if err != nil {
 		panic(fmt.Errorf("failed to get overall summary from DB -- %w", err))
 	}
@@ -161,9 +167,71 @@ func (h *ViewHandler) ServeHTTP_snip_summary(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ViewHandler) ServeHTTP_account(w http.ResponseWriter, r *http.Request, tail string) {
-	w.Write([]byte("/account/" + tail))
-
 	// TODO: Render and return account detail and transactions
+
+	id, _ := shiftpath.ShiftPath(tail)
+	if len(id) == 0 {
+		panic(fmt.Errorf("no account id provided"))
+	}
+
+	iid, err := strconv.Atoi(id)
+	if err != nil {
+		panic(fmt.Errorf("provided id is not integer -- %w", err))
+	}
+
+	month := bcdate.BCDate(querymonth.GetQM(r))
+
+	envs, err := h.sdb.GetEnvelopes()
+	if err != nil {
+		panic(fmt.Errorf("failed to get envelope list -- %w", err))
+	}
+
+	envList := make(map[model.PKEY]string, len(envs))
+
+	for _, env := range envs {
+		envList[env.ID] = env.Name
+	}
+
+	acct, err := h.sdb.GetAccount(model.PKEY(iid))
+	if err != nil {
+		panic(fmt.Errorf("failed to get account list -- %w", err))
+	}
+
+	accts, err := h.sdb.GetAccountSummary(month, acct.ID)
+	if err != nil {
+		panic(fmt.Errorf("failed to get account summary -- %w", err))
+	}
+
+	trans, err := h.sdb.GetAccountTransactions(month, acct.ID)
+	if err != nil {
+		panic(fmt.Errorf("failed to get account transactions -- %w", err))
+	}
+
+	summ, err := h.sdb.GetOverallSummary(month)
+	if err != nil {
+		panic(fmt.Errorf("failed to get overall summary from DB -- %w", err))
+	}
+
+	err = h.tmpl.ExecuteTemplate(w, "account.html", struct {
+		URL string
+		QM  bcdate.BCDate
+		S   model.Summary
+		ES  map[model.PKEY]string
+		A   model.Account
+		AS  model.AccountSummary
+		AT  []model.AccountTransaction
+	}{
+		URL: "/account/" + id,
+		QM:  month,
+		S:   summ,
+		ES:  envList,
+		A:   acct,
+		AS:  accts,
+		AT:  trans,
+	})
+	if err != nil {
+		panic(fmt.Errorf("failed to execute template -- %w", err))
+	}
 }
 
 func (h *ViewHandler) ServeHTTP_envelope(w http.ResponseWriter, r *http.Request, tail string) {

@@ -15,6 +15,8 @@ func printUsage() {
 	log.Print("Usages:")
 	log.Print("Re-init file:")
 	log.Print("querytool <dbfile> init")
+	log.Print("Re-init and populate with default data:")
+	log.Print("querytool <dbfile> default")
 	log.Print("Dump file contents:")
 	log.Print("querytool <dbfile> dump")
 	log.Print("Account:")
@@ -58,6 +60,17 @@ func main() {
 
 		if err := sdb.Init(); err != nil {
 			log.Fatalf("Error init-ing file: %s", err.Error())
+		}
+
+	case "default":
+		log.Printf("Default: %s", dbname)
+
+		if err := sdb.Init(); err != nil {
+			log.Fatalf("Error init-ing file: %s", err.Error())
+		}
+
+		if err := sdb.Run("init/sqlite3_data.sql"); err != nil {
+			log.Fatalf("Error running default data script: %s", err.Error())
 		}
 
 	case "dump":

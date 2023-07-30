@@ -1,41 +1,22 @@
-<html>
-    <head>
-        <style>
-            .content {
-            }
-            table {
-                width: 100%;
-            }
-            th {
-                text-align: left;
-            }
-        </style>
-    </head>
-    <body>
-        {{template "navbar.html" .QM}}
-        {{template "summary.html" .S}}
+{{template "header.html" .}}
 
-        <div class="content">
-            <table>
-                <tr>
-                    <th>Institution</th>
-                    <th>Account</th>
-                    <th>Balance</th>
-                    <th>In</th>
-                    <th>Out</th>
-                    <th>Uncleared</th>
-                </tr>
-                {{range $id, $elem := .AS}}
-                <tr>
-                    <td>{{$elem.A.Institution}}</td>
-                    <td><a href="/account/{{$id}}">{{$elem.A.Name}}</a></td>
-                    <td>{{FmtVal $elem.S.Bal}}</td>
-                    <td>{{FmtVal $elem.S.In}}</td>
-                    <td>{{FmtVal $elem.S.Out}}</td>
-                    <td>{{FmtVal $elem.S.Uncleared}}</td>
-                </tr>
-                {{end}}
-            </table>
-        </div>
-    </body>
-</html>
+<tr>
+    <th>Institution</th>
+    <th>Account</th>
+    <th>Balance</th>
+    <th>In</th>
+    <th>Out</th>
+    <th>Uncleared</th>
+</tr>
+{{range $id, $elem := .AS}}
+<tr>
+    <td>{{$elem.A.Institution}}</td>
+    <td><a href="/account/{{$id}}?qm={{$.QM.FmtMonth}}">{{$elem.A.Name}}</a></td>
+    <td>{{FmtVal $elem.S.Bal}}</td>
+    <td>{{FmtVal $elem.S.In}}</td>
+    <td>{{FmtVal $elem.S.Out}}</td>
+    <td>{{FmtVal $elem.S.Uncleared}}</td>
+</tr>
+{{end}}
+
+{{template "footer.html" .}}

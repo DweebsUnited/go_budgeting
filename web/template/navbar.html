@@ -1,0 +1,59 @@
+<div id="navbar">
+    <style>
+        .container {
+            border: thin solid grey;
+            border-bottom: 0;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            text-align: center;
+        }
+        .child {
+            padding: 0em 1em;
+            flex: 1;
+            flex-direction: column;
+            border-bottom: thin solid grey;
+        }
+        .noflex {
+            flex-grow: 0;
+        }
+        h1,h2,h3,h4 {
+            margin: 0;
+        }
+        .divide {
+            border-right: thin solid black;
+        }
+        a, a:visited, a:hover, a:active {
+            color: blue;
+        }
+    </style>
+
+    <div class="container">
+        <div class="child" style="padding: 0;">
+            <h1><a href="{{.URL}}">Today</a></h1>
+        </div>
+        <div class="child" style="padding: 0;">
+            <h1><a href="/envelopes?qm={{.QM.FmtMonth}}">Envelopes</a></h1>
+        </div>
+        <div class="child" style="padding: 0;">
+            <h1><a href="/accounts?qm={{.QM.FmtMonth}}">Accounts</a></h1>
+        </div>
+        <div class="child" style="padding: 0;">
+            <h1><a href="/transactions?qm={{.QM.FmtMonth}}">Transactions</a></h1>
+        </div>
+        <div class="child" style="padding: 0;">
+            <h1><a href="/analysis?qm={{.QM.FmtMonth}}">Analysis</a></h1>
+        </div>
+    </div>
+    <div class="container">
+        <div class="child" style="padding: 0;">
+            <h1><a href="{{.URL}}?qm={{.QM.PrevMonth.FmtMonth}}">&lt;&lt;&lt;</a></h1>
+        </div>
+        <div class="child" style="padding: 0;">
+            <h1>{{.QM.FmtMonth}}</h1>
+        </div>
+        <div class="child" style="padding: 0;">
+            <h1><a href="{{.URL}}?qm={{.QM.NextMonth.FmtMonth}}">&gt;&gt;&gt;</a></h1>
+        </div>
+    </div>
+</div>

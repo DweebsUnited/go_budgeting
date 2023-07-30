@@ -10,6 +10,7 @@ import (
 type DB interface {
 	Open(string) error
 	Init() error
+	Run(fname string) error
 
 	GetAccounts() ([]model.Account, error)
 	GetAccount(id model.PKEY) (model.Account, error)
@@ -27,6 +28,7 @@ type DB interface {
 	DeleteEnvelopeGroup(id model.PKEY) error
 
 	GetEnvelopesInGroup(id model.PKEY) ([]model.Envelope, error)
+	GetDebtEnvelopeFor(id model.PKEY) (model.Envelope, error)
 
 	GetEnvelopes() ([]model.Envelope, error)
 	GetEnvelope(id model.PKEY) (model.Envelope, error)

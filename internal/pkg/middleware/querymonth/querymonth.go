@@ -19,7 +19,7 @@ type QueryMonth struct {
 }
 
 func NewQueryMonth(next http.Handler) http.Handler {
-	return &QueryMonth{next, regexp.MustCompile(`(20[\d]{2})-(0[1-9]|1[0-2])`)}
+	return &QueryMonth{next, regexp.MustCompile(`^(2(?:0|1)[\d]{2})-(0[1-9]|1[0-2])$`)}
 }
 
 func (h *QueryMonth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -28,8 +28,9 @@ func (h *QueryMonth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(qm) > 0 {
 			match := h.re.FindStringSubmatch(qm[0])
 			if match != nil {
-				month, err := strconv.ParseInt(match[1]+match[2]+"00", 10, 32)
+				month, err := strconv.Atoi(match[1] + match[2] + "00")
 				if err == nil {
+					log.Printf("Found querymonth: %s-%s =  %d", match[1], match[2], month)
 					h.next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), queryMonthKey, int(month))))
 					return
 				}
@@ -39,8 +40,8 @@ func (h *QueryMonth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// If valid was found, we returned above
 	// Construct today
-	log.Print("Missing or mal-parsed date, use today")
 	qm := int(bcdate.CurrentMonth())
+	log.Printf("Missing or mal-parsed date, use today: %d", qm)
 	h.next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), queryMonthKey, qm)))
 
 }

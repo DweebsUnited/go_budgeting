@@ -1,6 +1,5 @@
 {{template "header.html" .}}
 
-
 <tr>
     <th>Cleared</th>
     <th>Post Date</th>
@@ -13,7 +12,7 @@
 <tr>
     <td>{{if $elem.Cleared}}&#10003;{{else}}&#10060;{{end}}</td>
     <td>{{$elem.PostDate.FmtDate}}</td>
-    <td>{{index $.ES $elem.EnvelopeID.Int32}}</td>
+    <td>{{if $elem.EnvelopeID.Valid}}{{index $.ES $elem.EnvelopeID.Int32}}{{end}}</td>
     <td>{{$elem.Typ}}</td>
     <td>{{FmtVal $elem.Amount}}</td>
     <td>{{$elem.Memo}}</td>

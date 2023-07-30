@@ -43,6 +43,21 @@ func (a Account) String() string {
 	return ret
 }
 
+func (tt TransactionType) String() string {
+	switch tt {
+	case TT_NORM:
+		return ""
+	case TT_INCOME:
+		return "Income"
+	case TT_TRANSFER:
+		return "Transfer"
+	case TT_ADJUST:
+		return "Adjustment"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 func (a Account) DebtEnvelopeName() string {
 	return "Debt Account: " + a.Institution + ":" + a.Name
 }
@@ -88,7 +103,7 @@ func (s EnvelopeSummary) String() string {
 
 func FormatVal(v int) string {
 	if v < 0 {
-		return fmt.Sprintf("$\u00A0(%.2f)", float32(v)/100.0)
+		return fmt.Sprintf("$\u00A0(%.2f)", float32(-v)/100.0)
 	} else {
 		return fmt.Sprintf("$\u00A0%.2f", float32(v)/100.0)
 	}
