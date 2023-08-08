@@ -1,14 +1,20 @@
 {{template "header.html" .}}
 
+<style>
+th.padded {
+    padding-top: 0.5em;
+}
+</style>
 <table>
     {{range $gid := .EGs}}
     {{with $ege := index $.EGEs $gid}}
+    <tr></tr>
     <tr>
-        <th>Name</th>
-        <th>Balance</th>
-        <th>Want</th>
-        <th>In</th>
-        <th>Activity</th>
+        <th class="padded">Name</th>
+        <th class="padded">Balance</th>
+        <th class="padded">Want</th>
+        <th class="padded">In</th>
+        <th class="padded">Activity</th>
     </tr>
     <tr>
         <th>{{$ege.G.Name}}</th>
