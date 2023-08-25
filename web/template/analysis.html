@@ -1,0 +1,58 @@
+{{template "header.html" .}}
+
+<script src='https://cdn.plot.ly/plotly-2.25.2.min.js'></script>
+<div id="gauges_budget"></div>
+<div id="gauges_gain"></div>
+
+<script>
+var data_budget = [
+    {
+		domain: { row: 0, column: 0 },
+		value: {{ .G.Spend.Value }},
+		title: { text: "Spending" },
+		type: "indicator",
+		mode: "gauge+number",
+        number: { valueformat: '($.2f' },
+        gauge: { axis: { visible: true, range: [ 0, {{ .G.Spend.Limit }} ] } }
+	},
+    {
+		domain: { row: 0, column: 1 },
+		value: {{ .G.Bills.Value }},
+		title: { text: "Bills" },
+		type: "indicator",
+		mode: "gauge+number",
+        number: { valueformat: '($.2f' },
+        gauge: { axis: { visible: true, range: [ 0, {{ .G.Bills.Limit }} ] } }
+	}
+];
+
+var data_gain = [
+    {
+		domain: { x: [ 0, 1 ], y: [ 0, 1 ] },
+		value: {{ .G.Gain.Value }},
+		title: { text: "Gain" },
+		type: "indicator",
+		mode: "gauge+number",
+        number: { valueformat: '($.2f' },
+        gauge: { axis: { visible: true, range: [ 0, {{ .G.Gain.Limit }} ] } }
+	}
+];
+
+var layout_budget = {
+    width: 800,
+    height: 400,
+    margin: { t: 10, b: 0 },
+    grid: { rows: 1, columns: 2, pattern: "independent" }
+};
+var layout_gain = {
+    width: 800,
+    height: 500,
+    margin: { t: 0, b: 0 }
+};
+
+Plotly.newPlot('gauges_budget', data_budget, layout_budget);
+Plotly.newPlot('gauges_gain', data_gain, layout_gain);
+
+</script>
+
+{{template "footer.html" .}}

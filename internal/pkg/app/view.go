@@ -12,7 +12,7 @@ import (
 	"strconv"
 )
 
-// TODO: Handler for View endpoints
+// Handler for View endpoints
 // Call Controllers, then render the outputs
 type ViewHandler struct {
 	sdb  db.DB
@@ -53,19 +53,21 @@ func (h *ViewHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch head {
 	case "":
 		// Default to envelopes view
-		http.Redirect(w, r, "/envelopes", http.StatusSeeOther)
+		http.Redirect(w, r, "/analysis", http.StatusSeeOther)
 
-	// Normal pages
+		// Normal pages
+	case "envelopes":
+		h.ServeHTTP_envelopes(w, r)
+	case "envelope":
+		h.ServeHTTP_envelope(w, r, tail)
 	case "accounts":
 		h.ServeHTTP_accounts(w, r)
 	case "account":
 		h.ServeHTTP_account(w, r, tail)
 	case "transactions":
 		h.ServeHTTP_transactions(w, r)
-	case "envelopes":
-		h.ServeHTTP_envelopes(w, r)
-	case "envelope":
-		h.ServeHTTP_envelope(w, r, tail)
+	case "analysis":
+		h.ServeHTTP_analysis(w, r)
 
 	// Nested snippets
 	case "view":
@@ -377,4 +379,84 @@ func (h *ViewHandler) ServeHTTP_snip_transaction(w http.ResponseWriter, r *http.
 	w.Write([]byte("/view/transaction"))
 
 	// TODO: Render and return entry form to add or update a transaction
+}
+
+func (h *ViewHandler) ServeHTTP_analysis(w http.ResponseWriter, r *http.Request) {
+	// Render and return envelope list
+
+	month := bcdate.BCDate(querymonth.GetQM(r))
+
+	summ, err := h.sdb.GetOverallSummary(month)
+	if err != nil {
+		panic(fmt.Errorf("failed to get overall summary from DB -- %w", err))
+	}
+
+	type Gauge struct {
+		Value float32
+		Limit float32
+	}
+	type Gauges struct {
+		Spend Gauge
+		Bills Gauge
+		Gain  Gauge
+	}
+
+	gs := Gauges{}
+
+	egs, err := h.sdb.GetEnvelopeGroups()
+	if err != nil {
+		panic(fmt.Errorf("failed to get envelope groups -- %w", err))
+	}
+
+	for _, eg := range egs {
+		summ := model.EnvelopeSummary{}
+
+		es, err := h.sdb.GetEnvelopesInGroup(eg.ID)
+		if err != nil {
+			panic(fmt.Errorf("failed to get envelopes in group -- %w", err))
+		}
+
+		ggoal := 0
+
+		for _, e := range es {
+			sum, err := h.sdb.GetEnvelopeSummary(month, e.ID)
+			if err != nil {
+				panic(fmt.Errorf("failed to get envelope summary -- %w", err))
+			}
+
+			summ.Bal += sum.Bal
+			summ.In += sum.In
+			summ.Out += sum.Out
+
+			ggoal += e.GoalWant(sum.Bal)
+		}
+
+		switch eg.Name {
+		case "Monthly Bills":
+			gs.Bills.Value = float32(summ.Bal) / 100.0
+			gs.Bills.Limit = float32(ggoal) / 100.0
+		case "Spending Money":
+			gs.Spend.Value = float32(summ.Bal) / 100.0
+			gs.Spend.Limit = float32(ggoal) / 100.0
+		}
+	}
+
+	gs.Gain.Value = float32(summ.Gain()) / 100.0
+	gs.Gain.Limit = float32(summ.Income) / 100.0
+
+	err = h.tmpl.ExecuteTemplate(w, "analysis.html", struct {
+		URL string
+		QM  bcdate.BCDate
+		S   model.Summary
+		G   Gauges
+	}{
+		URL: "/analysis",
+		QM:  month,
+		S:   summ,
+		G:   gs,
+	})
+	if err != nil {
+		panic(fmt.Errorf("failed to execute template -- %w", err))
+	}
+
 }

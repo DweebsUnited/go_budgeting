@@ -37,7 +37,11 @@ func Latest(a BCDate, b BCDate) BCDate {
 }
 
 func (a BCDate) PrevMonth() BCDate {
-	return a - 100
+	if (a/100)%100 == 1 {
+		return a - 10000 + 1100
+	} else {
+		return a - 100
+	}
 }
 func (a BCDate) NextMonth() BCDate {
 	a += 100
