@@ -14,11 +14,15 @@ import (
 func main() {
 
 	// TODO: Set up DB
+	log.Println("Startup -- create DB")
+
 	sdb := db.NewSQLite()
 	err := sdb.Open("bin/db.db")
 	if err != nil {
 		log.Fatalf("Failed to open DB: %s", err.Error())
 	}
+
+	log.Println("Startup -- create mux")
 
 	// Set up top level muxer
 	mux := http.NewServeMux()
@@ -36,7 +40,7 @@ func main() {
 	mux.Handle("/", app.NewViewHandler(sdb))
 
 	// Nearly done, static resources
-	mux.Handle("/static/", http.StripPrefix("/static", http.FileServer(http.Dir("D:/Projects/go_budgeting/web/static"))))
+	mux.Handle("/static/", http.StripPrefix("/static", http.FileServer(http.Dir("web/static"))))
 
 	log.Println("Listening...")
 
